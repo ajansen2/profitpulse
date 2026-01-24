@@ -1,0 +1,44 @@
+# ProfitPulse Shopify App Configuration
+# Use with: shopify app dev --config shopify.app.profitpulse.toml
+
+name = "ProfitPulse"
+client_id = "YOUR_CLIENT_ID_HERE"
+application_url = "https://profitpulse.vercel.app"
+embedded = true
+use_legacy_install_flow = false
+
+[access_scopes]
+# Required scopes for profit tracking
+scopes = "read_orders,read_products,read_customers"
+
+[auth]
+redirect_urls = [
+  "https://profitpulse.vercel.app/api/auth/shopify/callback",
+  "https://localhost:3000/api/auth/shopify/callback"
+]
+
+[webhooks]
+api_version = "2024-10"
+
+  # Order webhooks for profit tracking
+  [[webhooks.subscriptions]]
+  topics = ["orders/create", "orders/updated"]
+  uri = "/api/webhooks/shopify/orders"
+
+  # App lifecycle
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/api/webhooks/shopify/uninstall"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "YOUR_DEV_STORE.myshopify.com"
+
+# GDPR Webhooks (required for app store)
+[webhooks.privacy_compliance]
+customer_data_request_url = "/api/webhooks/customers/data-request"
+customer_deletion_url = "/api/webhooks/customers/redact"
+shop_deletion_url = "/api/webhooks/shop/redact"

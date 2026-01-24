@@ -1,0 +1,27 @@
+{
+  "git": {
+    "deploymentEnabled": true
+  },
+  "crons": [
+    {
+      "path": "/api/sync/facebook",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/sync/tiktok",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/sync/google",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/alerts/check",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/reports/send",
+      "schedule": "0 8 * * 1"
+    }
+  ]
+}
