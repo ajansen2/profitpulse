@@ -17,8 +17,16 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure client-side only
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
+    if (!mounted) return;
+
     async function loadStore() {
       try {
         console.log('🚀 Page loading, URL:', window.location.href);
@@ -106,7 +114,7 @@ export default function Home() {
     }
 
     loadStore();
-  }, []);
+  }, [mounted]);
 
   if (loading) {
     return (

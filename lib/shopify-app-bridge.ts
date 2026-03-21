@@ -76,7 +76,12 @@ export function initializeAppBridge() {
 }
 
 export function isEmbeddedInShopify(): boolean {
-  return window.self !== window.top;
+  try {
+    return window.self !== window.top;
+  } catch (e) {
+    // Cross-origin error means we're in an iframe
+    return true;
+  }
 }
 
 export function getShopFromUrl(): string | null {
