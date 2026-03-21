@@ -21,17 +21,25 @@ export default function Home() {
   useEffect(() => {
     async function loadStore() {
       try {
+        console.log('🚀 Page loading, URL:', window.location.href);
+
         // Initialize App Bridge if embedded
         if (isEmbeddedInShopify()) {
           setLoadingMessage('Connecting to Shopify...');
-          initializeAppBridge();
+          try {
+            initializeAppBridge();
+          } catch (e) {
+            console.warn('App Bridge init error (non-fatal):', e);
+          }
         }
 
         // Get shop from URL params
         const urlParams = new URLSearchParams(window.location.search);
-        const shop = urlParams.get('shop') || getShopFromUrl();
+        const shopFromUrl = urlParams.get('shop');
+        const shopFromBridge = getShopFromUrl();
+        const shop = shopFromUrl || shopFromBridge;
 
-        console.log('🏪 Looking up shop:', shop);
+        console.log('🏪 Looking up shop:', shop, '(url:', shopFromUrl, 'bridge:', shopFromBridge, ')');
 
         if (!shop) {
           // Not embedded and no shop param - show landing page or error
@@ -45,9 +53,16 @@ export default function Home() {
         }
 
         setLoadingMessage('Loading store data...');
+        console.log('📡 Fetching store data...');
 
         // Lookup store in database
-        const res = await fetch(`/api/stores/lookup?shop=${encodeURIComponent(shop)}`);
+        let res;
+        try {
+          res = await fetch(`/api/stores/lookup?shop=${encodeURIComponent(shop)}`);
+        } catch (fetchError) {
+          console.error('❌ Fetch error:', fetchError);
+          throw fetchError;
+        }
 
         console.log('📡 Store lookup response:', res.status);
 
