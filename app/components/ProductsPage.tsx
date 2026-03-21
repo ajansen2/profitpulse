@@ -42,6 +42,8 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const [bulkCogs, setBulkCogs] = useState('');
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -201,6 +203,16 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
       return sortOrder === 'desc' ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
 
+  // Pagination
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -342,7 +354,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
+              {paginatedProducts.map((product) => (
                 <tr key={product.id} className="border-b border-white/5 hover:bg-white/5 transition">
                   <td className="px-6 py-4">
                     <div className="text-white font-medium">{product.title}</div>
@@ -404,6 +416,48 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
               ))}
             </tbody>
           </table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t border-white/10">
+              <div className="text-white/60 text-sm">
+                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredProducts.length)} of {filteredProducts.length} products
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition"
+                >
+                  Previous
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                  .map((page, idx, arr) => (
+                    <span key={page}>
+                      {idx > 0 && arr[idx - 1] !== page - 1 && <span className="text-white/40 px-1">...</span>}
+                      <button
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-10 h-10 rounded-lg font-medium transition ${
+                          currentPage === page
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-white/10 hover:bg-white/20 text-white'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </span>
+                  ))}
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -55,7 +55,7 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'profitable' | 'unprofitable'>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = 10;
 
   const dateRange = useMemo(() => {
     const days = dateRangeOption === '7d' ? 7 : dateRangeOption === '14d' ? 14 : dateRangeOption === '30d' ? 30 : dateRangeOption === '90d' ? 90 : null;
