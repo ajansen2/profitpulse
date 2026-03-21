@@ -41,13 +41,31 @@ export default function Home() {
           }
         }
 
-        // Get shop from URL params
+        // Get shop and id_token from URL params
         const urlParams = new URLSearchParams(window.location.search);
         const shopFromUrl = urlParams.get('shop');
         const shopFromBridge = getShopFromUrl();
         const shop = shopFromUrl || shopFromBridge;
+        const idToken = urlParams.get('id_token');
 
         console.log('🏪 Looking up shop:', shop, '(url:', shopFromUrl, 'bridge:', shopFromBridge, ')');
+        console.log('🔑 ID token present:', !!idToken);
+
+        // If we have an id_token, try to exchange it for access token
+        if (shop && idToken) {
+          console.log('🔄 Attempting token exchange...');
+          try {
+            const tokenRes = await fetch('/api/auth/shopify/token-from-session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ shop, session_token: idToken }),
+            });
+            const tokenData = await tokenRes.json();
+            console.log('🔄 Token exchange result:', tokenData);
+          } catch (e) {
+            console.warn('Token exchange failed (non-fatal):', e);
+          }
+        }
 
         if (!shop) {
           // Not embedded and no shop param - show landing page or error
