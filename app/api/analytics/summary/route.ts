@@ -111,29 +111,37 @@ export async function GET(request: NextRequest) {
     .map(([date, data]) => ({ date, ...data }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Top products by profit
-  const { data: topProducts } = await supabase
-    .from('order_line_items')
-    .select('title, shopify_product_id, profit, total_price, quantity')
-    .eq('store_id', storeId)
-    .order('profit', { ascending: false })
-    .limit(100);
+  // Top products by profit - get line items for the order IDs we already fetched
+  const orderIds = orders?.map(o => o.shopify_order_id) || [];
+  let topProductsList: { title: string; profit: number; revenue: number; quantity: number }[] = [];
 
-  // Aggregate by product
-  const productProfits: { [key: string]: { title: string; profit: number; revenue: number; quantity: number } } = {};
-  for (const item of topProducts || []) {
-    const key = item.shopify_product_id || item.title;
-    if (!productProfits[key]) {
-      productProfits[key] = { title: item.title, profit: 0, revenue: 0, quantity: 0 };
+  console.log('Top products query:', { orderIds: orderIds.length, storeId });
+
+  if (orderIds.length > 0) {
+    const { data: topProducts, error: lineItemsError } = await supabase
+      .from('order_line_items')
+      .select('title, shopify_product_id, profit, total_price, quantity')
+      .eq('store_id', storeId)
+      .in('order_id', orderIds);
+
+    console.log('Line items result:', { found: topProducts?.length || 0, error: lineItemsError });
+
+    // Aggregate by product
+    const productProfits: { [key: string]: { title: string; profit: number; revenue: number; quantity: number } } = {};
+    for (const item of topProducts || []) {
+      const key = item.shopify_product_id || item.title;
+      if (!productProfits[key]) {
+        productProfits[key] = { title: item.title, profit: 0, revenue: 0, quantity: 0 };
+      }
+      productProfits[key].profit += item.profit || 0;
+      productProfits[key].revenue += item.total_price || 0;
+      productProfits[key].quantity += item.quantity || 0;
     }
-    productProfits[key].profit += item.profit || 0;
-    productProfits[key].revenue += item.total_price || 0;
-    productProfits[key].quantity += item.quantity || 0;
-  }
 
-  const topProductsList = Object.values(productProfits)
-    .sort((a, b) => b.profit - a.profit)
-    .slice(0, 10);
+    topProductsList = Object.values(productProfits)
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 10);
+  }
 
   return NextResponse.json({
     summary: {

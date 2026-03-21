@@ -150,6 +150,7 @@ export async function POST(request: NextRequest) {
           cost_per_item: costPerItem,
           total_cost: itemCogs,
           profit: totalItemPrice - itemCogs,
+          created_at: order.created_at,
         });
       }
 

@@ -420,6 +420,57 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       {/* General Settings */}
       {activeTab === 'general' && (
         <div className="space-y-6">
+          {/* Data Sync Section */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Data Sync</h3>
+            <p className="text-white/60 text-sm mb-4">Sync your Shopify data to ensure accurate profit calculations</p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    const res = await fetch(`/api/products/sync?store_id=${store.id}`);
+                    const data = await res.json();
+                    if (data.success) {
+                      alert(`Synced ${data.synced} products!`);
+                    } else {
+                      alert('Failed to sync products: ' + (data.error || 'Unknown error'));
+                    }
+                  } catch (error) {
+                    alert('Failed to sync products');
+                  }
+                  setSaving(false);
+                }}
+                disabled={saving}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                {saving ? '⏳' : '📦'} Sync Products
+              </button>
+              <button
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    const res = await fetch(`/api/orders/sync?store_id=${store.id}`);
+                    const data = await res.json();
+                    if (data.success) {
+                      alert(`Synced ${data.synced} orders!`);
+                    } else {
+                      alert('Failed to sync orders: ' + (data.error || 'Unknown error'));
+                    }
+                  } catch (error) {
+                    alert('Failed to sync orders');
+                  }
+                  setSaving(false);
+                }}
+                disabled={saving}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                {saving ? '⏳' : '🛒'} Sync Orders
+              </button>
+            </div>
+            <p className="text-white/40 text-xs mt-3">Last sync pulls recent data from Shopify. Orders include line items for product profitability.</p>
+          </div>
+
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
             <h3 className="text-lg font-bold text-white mb-4">Default COGS Settings</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
