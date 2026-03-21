@@ -192,13 +192,20 @@ export async function POST(request: NextRequest) {
         });
 
       // Upsert line items
+      let lineItemsSynced = 0;
       for (const item of lineItems) {
-        await supabase
+        const { error: lineItemError } = await supabase
           .from('order_line_items')
           .upsert(item, {
             onConflict: 'store_id,shopify_line_item_id',
           });
+        if (lineItemError) {
+          console.error('❌ Line item upsert error:', lineItemError, 'Item:', item.title);
+        } else {
+          lineItemsSynced++;
+        }
       }
+      console.log(`📦 Order ${order.id}: ${lineItemsSynced}/${lineItems.length} line items synced`);
 
       synced++;
     }
