@@ -36,6 +36,16 @@ export async function GET(request: NextRequest) {
     .gte('order_created_at', startDate.toISOString())
     .order('order_created_at', { ascending: false });
 
+  // Get orders for previous period (for comparison)
+  const prevStartDate = new Date(startDate);
+  prevStartDate.setDate(prevStartDate.getDate() - days);
+  const { data: prevOrders } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('store_id', storeId)
+    .gte('order_created_at', prevStartDate.toISOString())
+    .lt('order_created_at', startDate.toISOString());
+
   if (error) {
     return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
@@ -53,6 +63,18 @@ export async function GET(request: NextRequest) {
     : 0;
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
   const avgProfitPerOrder = totalOrders > 0 ? totalNetProfit / totalOrders : 0;
+
+  // Calculate previous period stats for comparison
+  const prevTotalOrders = prevOrders?.length || 0;
+  const prevTotalRevenue = prevOrders?.reduce((sum, o) => sum + (o.total_price || 0), 0) || 0;
+  const prevTotalNetProfit = prevOrders?.reduce((sum, o) => sum + (o.net_profit || 0), 0) || 0;
+  const prevAvgOrderValue = prevTotalOrders > 0 ? prevTotalRevenue / prevTotalOrders : 0;
+
+  // Calculate percentage changes
+  const revenueChange = prevTotalRevenue > 0 ? ((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100 : 0;
+  const profitChange = prevTotalNetProfit > 0 ? ((totalNetProfit - prevTotalNetProfit) / prevTotalNetProfit) * 100 : 0;
+  const ordersChange = prevTotalOrders > 0 ? ((totalOrders - prevTotalOrders) / prevTotalOrders) * 100 : 0;
+  const aovChange = prevAvgOrderValue > 0 ? ((avgOrderValue - prevAvgOrderValue) / prevAvgOrderValue) * 100 : 0;
 
   // Get ad spend for period
   const { data: adSpend } = await supabase
@@ -123,6 +145,15 @@ export async function GET(request: NextRequest) {
       totalAdSpend,
       roas,
       profitAfterAds,
+    },
+    comparison: {
+      revenueChange,
+      profitChange,
+      ordersChange,
+      aovChange,
+      prevTotalRevenue,
+      prevTotalNetProfit,
+      prevTotalOrders,
     },
     chartData,
     topProducts: topProductsList,

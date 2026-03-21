@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 import Link from 'next/link';
 import Image from 'next/image';
 import ProductsPage from './ProductsPage';
@@ -57,8 +57,19 @@ interface RecentOrder {
   created_at: string;
 }
 
+interface Comparison {
+  revenueChange: number;
+  profitChange: number;
+  ordersChange: number;
+  aovChange: number;
+  prevTotalRevenue: number;
+  prevTotalNetProfit: number;
+  prevTotalOrders: number;
+}
+
 interface AnalyticsData {
   summary: Summary;
+  comparison: Comparison;
   chartData: ChartData[];
   topProducts: TopProduct[];
   recentOrders: RecentOrder[];
@@ -103,6 +114,15 @@ export default function Dashboard({ store }: { store: Store }) {
               roas: 0,
               profitAfterAds: 0,
             },
+            comparison: {
+              revenueChange: 0,
+              profitChange: 0,
+              ordersChange: 0,
+              aovChange: 0,
+              prevTotalRevenue: 0,
+              prevTotalNetProfit: 0,
+              prevTotalOrders: 0,
+            },
             chartData: [],
             topProducts: [],
             recentOrders: [],
@@ -129,6 +149,15 @@ export default function Dashboard({ store }: { store: Store }) {
             totalAdSpend: 0,
             roas: 0,
             profitAfterAds: 0,
+          },
+          comparison: {
+            revenueChange: 0,
+            profitChange: 0,
+            ordersChange: 0,
+            aovChange: 0,
+            prevTotalRevenue: 0,
+            prevTotalNetProfit: 0,
+            prevTotalOrders: 0,
           },
           chartData: [],
           topProducts: [],
@@ -174,7 +203,54 @@ export default function Dashboard({ store }: { store: Store }) {
     );
   }
 
-  const { summary, chartData, topProducts, recentOrders } = analytics;
+  const { summary, comparison, chartData, topProducts, recentOrders } = analytics;
+
+  // CSV Export function
+  const exportToCSV = (type: 'orders' | 'products') => {
+    if (type === 'orders' && recentOrders.length > 0) {
+      const headers = ['Order Number', 'Date', 'Revenue', 'Profit', 'Margin'];
+      const rows = recentOrders.map(o => [
+        o.order_number,
+        new Date(o.created_at).toLocaleDateString(),
+        o.total_price.toFixed(2),
+        o.net_profit.toFixed(2),
+        o.profit_margin.toFixed(1) + '%'
+      ]);
+      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      downloadCSV(csv, 'orders-export.csv');
+    } else if (type === 'products' && topProducts.length > 0) {
+      const headers = ['Product', 'Revenue', 'Profit', 'Quantity', 'Margin'];
+      const rows = topProducts.map(p => [
+        `"${p.title}"`,
+        p.revenue.toFixed(2),
+        p.profit.toFixed(2),
+        p.quantity,
+        ((p.profit / p.revenue) * 100).toFixed(1) + '%'
+      ]);
+      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      downloadCSV(csv, 'products-export.csv');
+    }
+  };
+
+  const downloadCSV = (csv: string, filename: string) => {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Format change indicator
+  const formatChange = (change: number) => {
+    const isPositive = change >= 0;
+    return (
+      <span className={`text-sm font-medium ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+        {isPositive ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%
+      </span>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900">
@@ -397,7 +473,10 @@ export default function Dashboard({ store }: { store: Store }) {
                 </svg>
               </div>
               <div className="text-3xl font-bold text-white mb-1">{formatCurrency(summary.totalRevenue)}</div>
-              <div className="text-white/40 text-sm">{summary.totalOrders} orders</div>
+              <div className="flex items-center gap-2">
+                <span className="text-white/40 text-sm">{summary.totalOrders} orders</span>
+                {comparison.revenueChange !== 0 && formatChange(comparison.revenueChange)}
+              </div>
             </div>
 
             <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
@@ -423,8 +502,9 @@ export default function Dashboard({ store }: { store: Store }) {
               <div className={`text-3xl font-bold mb-1 ${summary.totalNetProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {formatCurrency(summary.totalNetProfit)}
               </div>
-              <div className="text-white/40 text-sm">
-                {formatPercent(summary.avgProfitMargin)} margin
+              <div className="flex items-center gap-2">
+                <span className="text-white/40 text-sm">{formatPercent(summary.avgProfitMargin)} margin</span>
+                {comparison.profitChange !== 0 && formatChange(comparison.profitChange)}
               </div>
             </div>
 
@@ -505,12 +585,23 @@ export default function Dashboard({ store }: { store: Store }) {
             <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-white">Top Products by Profit</h2>
-                <button
-                  onClick={() => navigateTo('products')}
-                  className="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"
-                >
-                  View All →
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => exportToCSV('products')}
+                    className="text-white/60 hover:text-white text-sm font-medium transition flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    CSV
+                  </button>
+                  <button
+                    onClick={() => navigateTo('products')}
+                    className="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"
+                  >
+                    View All →
+                  </button>
+                </div>
               </div>
               <div className="space-y-3">
                 {(topProducts || []).slice(0, 5).map((product, i) => {
@@ -540,6 +631,92 @@ export default function Dashboard({ store }: { store: Store }) {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Additional Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Daily Orders Bar Chart */}
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <h2 className="text-lg font-bold text-white mb-6">Daily Orders</h2>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.5)' }}
+                      tickFormatter={(value) => {
+                        const date = new Date(value);
+                        return `${date.getMonth() + 1}/${date.getDate()}`;
+                      }}
+                    />
+                    <YAxis tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.5)' }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                      labelStyle={{ color: 'white' }}
+                      labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                    />
+                    <Bar dataKey="orders" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Orders" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Cost Breakdown Pie Chart */}
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <h2 className="text-lg font-bold text-white mb-6">Revenue Breakdown</h2>
+              <div className="h-64 flex items-center justify-center">
+                {summary.totalRevenue > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Net Profit', value: Math.max(0, summary.totalNetProfit), color: '#10b981' },
+                          { name: 'COGS', value: summary.totalCogs, color: '#ef4444' },
+                          { name: 'Fees', value: summary.totalFees, color: '#f59e0b' },
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {[
+                          { name: 'Net Profit', value: Math.max(0, summary.totalNetProfit), color: '#10b981' },
+                          { name: 'COGS', value: summary.totalCogs, color: '#ef4444' },
+                          { name: 'Fees', value: summary.totalFees, color: '#f59e0b' },
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                        formatter={(value) => formatCurrency(value as number)}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-white/40 text-center">No data yet</div>
+                )}
+              </div>
+              {summary.totalRevenue > 0 && (
+                <div className="flex justify-center gap-6 mt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                    <span className="text-white/60 text-sm">Profit</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <span className="text-white/60 text-sm">COGS</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                    <span className="text-white/60 text-sm">Fees</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -579,12 +756,23 @@ export default function Dashboard({ store }: { store: Store }) {
             <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-white">Recent Orders</h2>
-                <button
-                  onClick={() => navigateTo('orders')}
-                  className="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"
-                >
-                  View All →
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => exportToCSV('orders')}
+                    className="text-white/60 hover:text-white text-sm font-medium transition flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    CSV
+                  </button>
+                  <button
+                    onClick={() => navigateTo('orders')}
+                    className="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"
+                  >
+                    View All →
+                  </button>
+                </div>
               </div>
               <div className="space-y-3">
                 {recentOrders.slice(0, 5).map((order) => (

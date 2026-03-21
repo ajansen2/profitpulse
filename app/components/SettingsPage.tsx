@@ -36,6 +36,14 @@ interface HiddenFee {
   recommendation: string;
 }
 
+interface Expense {
+  id: string;
+  name: string;
+  amount: number;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  category: 'shopify' | 'apps' | 'marketing' | 'shipping' | 'other';
+}
+
 interface SettingsPageProps {
   store: Store;
   onBack: () => void;
@@ -66,9 +74,11 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'fees' | 'notifications' | 'tools'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'fees' | 'expenses' | 'notifications' | 'tools'>('general');
   const [hiddenFees, setHiddenFees] = useState<HiddenFee[]>([]);
   const [scanningFees, setScanningFees] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [newExpense, setNewExpense] = useState({ name: '', amount: '', frequency: 'monthly', category: 'other' });
 
   // Bundle Calculator State
   const [bundleProducts, setBundleProducts] = useState<{ name: string; price: number; cost: number; }[]>([
@@ -82,7 +92,63 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
 
   useEffect(() => {
     loadSettings();
+    loadExpenses();
   }, [store.id]);
+
+  const loadExpenses = async () => {
+    try {
+      const res = await fetch(`/api/expenses?store_id=${store.id}`);
+      const data = await res.json();
+      if (data.expenses) {
+        setExpenses(data.expenses);
+      }
+    } catch (err) {
+      console.error('Error loading expenses:', err);
+    }
+  };
+
+  const addExpense = async () => {
+    if (!newExpense.name || !newExpense.amount) return;
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          store_id: store.id,
+          ...newExpense,
+          amount: parseFloat(newExpense.amount)
+        })
+      });
+      const data = await res.json();
+      if (data.expense) {
+        setExpenses([data.expense, ...expenses]);
+        setNewExpense({ name: '', amount: '', frequency: 'monthly', category: 'other' });
+      }
+    } catch (err) {
+      console.error('Error adding expense:', err);
+    }
+  };
+
+  const deleteExpense = async (id: string) => {
+    try {
+      await fetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
+      setExpenses(expenses.filter(e => e.id !== id));
+    } catch (err) {
+      console.error('Error deleting expense:', err);
+    }
+  };
+
+  const getMonthlyAmount = (expense: Expense) => {
+    switch (expense.frequency) {
+      case 'daily': return expense.amount * 30;
+      case 'weekly': return expense.amount * 4;
+      case 'monthly': return expense.amount;
+      case 'yearly': return expense.amount / 12;
+      default: return expense.amount;
+    }
+  };
+
+  const totalMonthlyExpenses = expenses.reduce((sum, e) => sum + getMonthlyAmount(e), 0);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -261,6 +327,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
         {[
           { id: 'general', label: 'General', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
           { id: 'fees', label: 'Fees', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+          { id: 'expenses', label: 'Expenses', icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z' },
           { id: 'notifications', label: 'Alerts', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
           { id: 'tools', label: 'Profit Tools', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
         ].map((tab) => (
@@ -456,6 +523,135 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Expenses */}
+      {activeTab === 'expenses' && (
+        <div className="space-y-6">
+          {/* Monthly Summary */}
+          <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border-2 border-red-500/30 rounded-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white">Monthly Operating Expenses</h3>
+                <p className="text-white/60 text-sm">Track your recurring costs to see true profit</p>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-red-400">{formatCurrency(totalMonthlyExpenses)}</div>
+                <div className="text-white/60 text-sm">/month</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Add Expense */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Add Expense</h3>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="md:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Expense name"
+                  value={newExpense.name}
+                  onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <div className="flex items-center">
+                  <span className="text-white/60 mr-2">$</span>
+                  <input
+                    type="number"
+                    placeholder="Amount"
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <select
+                  value={newExpense.frequency}
+                  onChange={(e) => setNewExpense({ ...newExpense, frequency: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="daily">Daily</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              <div>
+                <button
+                  onClick={addExpense}
+                  disabled={!newExpense.name || !newExpense.amount}
+                  className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white rounded-lg font-medium transition"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Expense List */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Your Expenses</h3>
+            {expenses.length === 0 ? (
+              <div className="text-center py-8 text-white/40">
+                <p>No expenses tracked yet.</p>
+                <p className="text-sm mt-1">Add your Shopify subscription, app fees, and other costs above.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {expenses.map((expense) => (
+                  <div key={expense.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                    <div>
+                      <div className="text-white font-medium">{expense.name}</div>
+                      <div className="text-white/40 text-sm capitalize">{expense.frequency}</div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="text-white font-medium">{formatCurrency(expense.amount)}</div>
+                        <div className="text-white/40 text-sm">{formatCurrency(getMonthlyAmount(expense))}/mo</div>
+                      </div>
+                      <button
+                        onClick={() => deleteExpense(expense.id)}
+                        className="text-red-400 hover:text-red-300 transition"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Common Expenses Quick Add */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Quick Add Common Expenses</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { name: 'Shopify Basic', amount: 39, icon: '🛍️' },
+                { name: 'Shopify Standard', amount: 105, icon: '🛍️' },
+                { name: 'Klaviyo', amount: 45, icon: '📧' },
+                { name: 'Shipping Insurance', amount: 50, icon: '📦' },
+              ].map((item) => (
+                <button
+                  key={item.name}
+                  onClick={() => {
+                    setNewExpense({ name: item.name, amount: item.amount.toString(), frequency: 'monthly', category: 'apps' });
+                  }}
+                  className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-left transition"
+                >
+                  <div className="text-2xl mb-1">{item.icon}</div>
+                  <div className="text-white text-sm font-medium">{item.name}</div>
+                  <div className="text-white/60 text-xs">{formatCurrency(item.amount)}/mo</div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
