@@ -3,6 +3,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Link from 'next/link';
+import Image from 'next/image';
+import ProductsPage from './ProductsPage';
+import OrdersPage from './OrdersPage';
+import SettingsPage from './SettingsPage';
 
 interface Store {
   id: string;
@@ -187,11 +191,13 @@ export default function Dashboard({ store }: { store: Store }) {
           {/* Logo */}
           <div className="p-6 border-b border-white/10">
             <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
+              <Image
+                src="/logo.png"
+                alt="ProfitPulse"
+                width={40}
+                height={40}
+                className="rounded-xl"
+              />
               <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
                 ProfitPulse
               </span>
@@ -373,7 +379,12 @@ export default function Dashboard({ store }: { store: Store }) {
           </div>
         )}
 
-        {/* Dashboard Content */}
+        {/* Page Content */}
+        {activePage === 'products' && <ProductsPage store={store} onBack={() => setActivePage('dashboard')} />}
+        {activePage === 'orders' && <OrdersPage store={store} onBack={() => setActivePage('dashboard')} />}
+        {activePage === 'settings' && <SettingsPage store={store} onBack={() => setActivePage('dashboard')} />}
+
+        {activePage === 'dashboard' && (
         <div className="p-6">
           {/* Key Metrics - The money stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -602,6 +613,7 @@ export default function Dashboard({ store }: { store: Store }) {
             </div>
           )}
         </div>
+        )}
       </main>
     </div>
   );
