@@ -9,14 +9,21 @@ import crypto from 'crypto';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const shop = searchParams.get('shop');
+    // Get shop from URL params OR from cookie (fallback for managed install)
+    let shop = searchParams.get('shop');
     const code = searchParams.get('code');
     const hmac = searchParams.get('hmac');
 
-    console.log('🔐 OAuth callback for shop:', shop);
+    // If no shop in URL, try to get from cookie
+    if (!shop) {
+      shop = request.cookies.get('shopify_oauth_shop')?.value || null;
+      console.log('🔐 OAuth callback - shop from cookie:', shop);
+    } else {
+      console.log('🔐 OAuth callback for shop:', shop);
+    }
 
     if (!shop || !code) {
-      console.error('❌ Missing shop or code');
+      console.error('❌ Missing shop or code. Shop:', shop, 'Code:', !!code);
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
