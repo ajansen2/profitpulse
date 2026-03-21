@@ -429,7 +429,11 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                 onClick={async () => {
                   setSaving(true);
                   try {
-                    const res = await fetch(`/api/products/sync?store_id=${store.id}`);
+                    const res = await fetch('/api/products/sync', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ store_id: store.id }),
+                    });
                     const data = await res.json();
                     if (data.success) {
                       alert(`Synced ${data.synced} products!`);
@@ -450,7 +454,11 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                 onClick={async () => {
                   setSaving(true);
                   try {
-                    const res = await fetch(`/api/orders/sync?store_id=${store.id}`);
+                    const res = await fetch('/api/orders/sync', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ store_id: store.id }),
+                    });
                     const data = await res.json();
                     if (data.success) {
                       alert(`Synced ${data.synced} orders!`);
@@ -933,6 +941,20 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       {/* Notifications */}
       {activeTab === 'notifications' && (
         <div className="space-y-6">
+          {/* Email Address */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Notification Email</h3>
+            <p className="text-white/60 text-sm mb-3">Alerts and digests will be sent to this email address</p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white">
+                {store.email || 'No email set'}
+              </div>
+              {!store.email && (
+                <span className="text-amber-400 text-sm">Add email in Shopify to receive alerts</span>
+              )}
+            </div>
+          </div>
+
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
             <h3 className="text-lg font-bold text-white mb-4">Email Notifications</h3>
             <div className="space-y-4">
