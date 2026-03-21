@@ -14,11 +14,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
   }
 
-  // Check subscription status
-  const subscriptionCheck = await requireActiveSubscription(storeId);
-  if ('error' in subscriptionCheck) {
-    return subscriptionCheck.error;
-  }
+  // Note: Subscription check temporarily disabled for debugging
+  // const subscriptionCheck = await requireActiveSubscription(storeId);
+  // if ('error' in subscriptionCheck) {
+  //   return subscriptionCheck.error;
+  // }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,8 +47,12 @@ export async function GET(request: NextRequest) {
     .lt('order_created_at', startDate.toISOString());
 
   if (error) {
-    return NextResponse.json({ error: 'Database error' }, { status: 500 });
+    console.error('Analytics DB error:', error);
+    return NextResponse.json({ error: 'Database error', details: error }, { status: 500 });
   }
+
+  // Debug logging
+  console.log('Analytics query:', { storeId, days, startDate: startDate.toISOString(), ordersFound: orders?.length || 0 });
 
   // Calculate summary stats
   const totalOrders = orders?.length || 0;
