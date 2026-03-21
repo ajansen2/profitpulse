@@ -129,8 +129,7 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
   const filteredOrders = useMemo(() => {
     return orders
       .filter(order => {
-        const matchesSearch = order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             order.customer_email?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = order.order_number?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesFilter = filterStatus === 'all' ||
                              (filterStatus === 'profitable' && order.net_profit >= 0) ||
                              (filterStatus === 'unprofitable' && order.net_profit < 0);
@@ -281,7 +280,7 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
           </svg>
           <input
             type="text"
-            placeholder="Search by order # or email..."
+            placeholder="Search by order #..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
@@ -310,7 +309,6 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
           <thead>
             <tr className="border-b border-white/10">
               <th className="text-left px-6 py-4 text-white/60 text-sm font-medium">Order</th>
-              <th className="text-left px-4 py-4 text-white/60 text-sm font-medium">Customer</th>
               <th className="text-right px-4 py-4 text-white/60 text-sm font-medium">Revenue</th>
               <th className="text-right px-4 py-4 text-white/60 text-sm font-medium">COGS</th>
               <th className="text-right px-4 py-4 text-white/60 text-sm font-medium">Fees</th>
@@ -329,9 +327,6 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
                 <td className="px-6 py-4">
                   <div className="text-white font-medium">#{order.order_number}</div>
                   <div className="text-white/40 text-sm">{formatDate(order.order_created_at)}</div>
-                </td>
-                <td className="px-4 py-4">
-                  <div className="text-white/80">{order.customer_email || 'No email'}</div>
                 </td>
                 <td className="px-4 py-4 text-right text-white">
                   {formatCurrency(order.total_price)}

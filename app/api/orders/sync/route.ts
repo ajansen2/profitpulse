@@ -63,9 +63,11 @@ export async function POST(request: NextRequest) {
     let hasNextPage = true;
 
     while (hasNextPage) {
+      // Use fields parameter to only request non-protected data (no customer info)
+      const fields = 'id,order_number,name,subtotal_price,total_price,total_tax,total_discounts,total_shipping_price_set,shipping_lines,line_items,financial_status,fulfillment_status,created_at';
       const url: string = pageInfo
-        ? `https://${store.shop_domain}/admin/api/2024-10/orders.json?limit=250&status=any&page_info=${pageInfo}`
-        : `https://${store.shop_domain}/admin/api/2024-10/orders.json?limit=250&status=any&created_at_min=${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()}`;
+        ? `https://${store.shop_domain}/admin/api/2024-10/orders.json?limit=250&status=any&page_info=${pageInfo}&fields=${fields}`
+        : `https://${store.shop_domain}/admin/api/2024-10/orders.json?limit=250&status=any&created_at_min=${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()}&fields=${fields}`;
 
       console.log('📡 Fetching orders from Shopify...');
 
@@ -168,7 +170,7 @@ export async function POST(request: NextRequest) {
           store_id,
           shopify_order_id: order.id.toString(),
           order_number: order.order_number?.toString() || order.name,
-          customer_email: order.email || '',
+          customer_email: '', // Not fetching customer data to avoid protected data requirements
           subtotal_price: subtotalPrice,
           total_price: totalPrice,
           total_tax: totalTax,
