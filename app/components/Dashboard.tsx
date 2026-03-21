@@ -7,6 +7,7 @@ import Image from 'next/image';
 import ProductsPage from './ProductsPage';
 import OrdersPage from './OrdersPage';
 import SettingsPage from './SettingsPage';
+import AIProfitCoach from './AIProfitCoach';
 
 interface Store {
   id: string;
@@ -718,6 +719,25 @@ export default function Dashboard({ store }: { store: Store }) {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* AI Profit Coach */}
+          <div className="mb-8">
+            <AIProfitCoach
+              store={store}
+              summary={{
+                totalRevenue: summary.totalRevenue,
+                totalProfit: summary.totalNetProfit,
+                avgProfitMargin: summary.avgProfitMargin,
+                totalOrders: summary.totalOrders,
+              }}
+              topProducts={topProducts.map(p => ({
+                title: p.title,
+                profit: p.profit,
+                margin: p.margin || (p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0),
+                quantity: p.quantity,
+              }))}
+            />
           </div>
 
           {/* Cost Breakdown */}

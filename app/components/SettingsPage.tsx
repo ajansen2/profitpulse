@@ -74,11 +74,23 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'fees' | 'expenses' | 'notifications' | 'tools'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'fees' | 'expenses' | 'adspend' | 'notifications' | 'tools'>('general');
   const [hiddenFees, setHiddenFees] = useState<HiddenFee[]>([]);
   const [scanningFees, setScanningFees] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [newExpense, setNewExpense] = useState({ name: '', amount: '', frequency: 'monthly', category: 'other' });
+
+  // Ad Spend State
+  interface AdSpendEntry {
+    id: string;
+    platform: string;
+    spend: number;
+    date: string;
+    campaign_name?: string;
+  }
+  const [adSpend, setAdSpend] = useState<AdSpendEntry[]>([]);
+  const [adSpendSummary, setAdSpendSummary] = useState<{ total: number; byPlatform: Record<string, number> }>({ total: 0, byPlatform: {} });
+  const [newAdSpend, setNewAdSpend] = useState({ platform: 'facebook', spend: '', date: new Date().toISOString().split('T')[0], campaign_name: '' });
 
   // Bundle Calculator State
   const [bundleProducts, setBundleProducts] = useState<{ name: string; price: number; cost: number; }[]>([
@@ -93,7 +105,63 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   useEffect(() => {
     loadSettings();
     loadExpenses();
+    loadAdSpend();
   }, [store.id]);
+
+  const loadAdSpend = async () => {
+    try {
+      const res = await fetch(`/api/ad-spend?store_id=${store.id}&days=30`);
+      const data = await res.json();
+      if (data.adSpend) {
+        setAdSpend(data.adSpend);
+        setAdSpendSummary(data.summary);
+      }
+    } catch (err) {
+      console.error('Error loading ad spend:', err);
+    }
+  };
+
+  const addAdSpend = async () => {
+    if (!newAdSpend.spend || !newAdSpend.date) return;
+    try {
+      const res = await fetch('/api/ad-spend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          store_id: store.id,
+          ...newAdSpend,
+          spend: parseFloat(newAdSpend.spend)
+        })
+      });
+      const data = await res.json();
+      if (data.adSpend) {
+        await loadAdSpend(); // Reload to get updated summary
+        setNewAdSpend({ platform: 'facebook', spend: '', date: new Date().toISOString().split('T')[0], campaign_name: '' });
+      }
+    } catch (err) {
+      console.error('Error adding ad spend:', err);
+    }
+  };
+
+  const deleteAdSpend = async (id: string) => {
+    try {
+      await fetch(`/api/ad-spend?id=${id}`, { method: 'DELETE' });
+      await loadAdSpend();
+    } catch (err) {
+      console.error('Error deleting ad spend:', err);
+    }
+  };
+
+  const getPlatformIcon = (platform: string) => {
+    switch (platform) {
+      case 'facebook': return '📘';
+      case 'google': return '🔍';
+      case 'tiktok': return '🎵';
+      case 'instagram': return '📸';
+      case 'pinterest': return '📌';
+      default: return '📊';
+    }
+  };
 
   const loadExpenses = async () => {
     try {
@@ -328,6 +396,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
           { id: 'general', label: 'General', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
           { id: 'fees', label: 'Fees', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
           { id: 'expenses', label: 'Expenses', icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z' },
+          { id: 'adspend', label: 'Ad Spend', icon: 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z' },
           { id: 'notifications', label: 'Alerts', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
           { id: 'tools', label: 'Profit Tools', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
         ].map((tab) => (
@@ -651,6 +720,160 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                   <div className="text-white/60 text-xs">{formatCurrency(item.amount)}/mo</div>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ad Spend */}
+      {activeTab === 'adspend' && (
+        <div className="space-y-6">
+          {/* Summary */}
+          <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-2 border-blue-500/30 rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">Ad Spend (Last 30 Days)</h3>
+                <p className="text-white/60 text-sm">Track your advertising costs to see true profit</p>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-blue-400">{formatCurrency(adSpendSummary.total)}</div>
+                <div className="text-white/60 text-sm">total ad spend</div>
+              </div>
+            </div>
+            {Object.keys(adSpendSummary.byPlatform).length > 0 && (
+              <div className="flex gap-4 mt-4 pt-4 border-t border-white/10">
+                {Object.entries(adSpendSummary.byPlatform).map(([platform, amount]) => (
+                  <div key={platform} className="flex items-center gap-2">
+                    <span className="text-xl">{getPlatformIcon(platform)}</span>
+                    <span className="text-white/60 capitalize">{platform}:</span>
+                    <span className="text-white font-medium">{formatCurrency(amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add Ad Spend */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Add Ad Spend</h3>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div>
+                <select
+                  value={newAdSpend.platform}
+                  onChange={(e) => setNewAdSpend({ ...newAdSpend, platform: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="facebook">Facebook</option>
+                  <option value="google">Google</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="pinterest">Pinterest</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <div className="flex items-center">
+                  <span className="text-white/60 mr-2">$</span>
+                  <input
+                    type="number"
+                    placeholder="Amount"
+                    value={newAdSpend.spend}
+                    onChange={(e) => setNewAdSpend({ ...newAdSpend, spend: e.target.value })}
+                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <input
+                  type="date"
+                  value={newAdSpend.date}
+                  onChange={(e) => setNewAdSpend({ ...newAdSpend, date: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  placeholder="Campaign (optional)"
+                  value={newAdSpend.campaign_name}
+                  onChange={(e) => setNewAdSpend({ ...newAdSpend, campaign_name: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <button
+                  onClick={addAdSpend}
+                  disabled={!newAdSpend.spend}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg font-medium transition"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Ad Spend History */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Recent Ad Spend</h3>
+            {adSpend.length === 0 ? (
+              <div className="text-center py-8 text-white/40">
+                <p>No ad spend tracked yet.</p>
+                <p className="text-sm mt-1">Add your Facebook, Google, TikTok ad spend above to see true profit.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {adSpend.slice(0, 20).map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{getPlatformIcon(entry.platform)}</span>
+                      <div>
+                        <div className="text-white font-medium capitalize">{entry.platform}</div>
+                        <div className="text-white/40 text-sm">
+                          {new Date(entry.date).toLocaleDateString()}
+                          {entry.campaign_name && ` • ${entry.campaign_name}`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-white font-medium">{formatCurrency(entry.spend)}</div>
+                      <button
+                        onClick={() => deleteAdSpend(entry.id)}
+                        className="text-red-400 hover:text-red-300 transition"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ROAS Calculator */}
+          <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border-2 border-emerald-500/30 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-2">ROAS Calculator</h3>
+            <p className="text-white/60 text-sm mb-4">
+              Based on your ad spend and revenue, here's your Return on Ad Spend
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/5 rounded-lg p-4">
+                <div className="text-white/60 text-sm">Total Ad Spend</div>
+                <div className="text-xl font-bold text-red-400">{formatCurrency(adSpendSummary.total)}</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-4">
+                <div className="text-white/60 text-sm">ROAS</div>
+                <div className="text-xl font-bold text-emerald-400">
+                  {adSpendSummary.total > 0 ? '—' : '—'}x
+                </div>
+                <div className="text-white/40 text-xs">Sync orders to calculate</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-4">
+                <div className="text-white/60 text-sm">Profit After Ads</div>
+                <div className="text-xl font-bold text-white">—</div>
+                <div className="text-white/40 text-xs">Sync orders to calculate</div>
+              </div>
             </div>
           </div>
         </div>
