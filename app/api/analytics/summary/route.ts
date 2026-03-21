@@ -111,8 +111,8 @@ export async function GET(request: NextRequest) {
     .map(([date, data]) => ({ date, ...data }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Top products by profit - get line items for the order IDs we already fetched
-  const orderIds = orders?.map(o => o.shopify_order_id) || [];
+  // Top products by profit - get line items for the order UUIDs we already fetched
+  const orderIds = orders?.map(o => o.id) || [];
   let topProductsList: { title: string; profit: number; revenue: number; quantity: number }[] = [];
 
   console.log('Top products query:', { orderIds: orderIds.length, storeId });

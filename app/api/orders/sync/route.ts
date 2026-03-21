@@ -139,7 +139,6 @@ export async function POST(request: NextRequest) {
 
         lineItems.push({
           store_id,
-          order_id: order.id.toString(),
           shopify_line_item_id: item.id?.toString(),
           shopify_product_id: item.product_id?.toString(),
           shopify_variant_id: item.variant_id?.toString(),
@@ -164,8 +163,8 @@ export async function POST(request: NextRequest) {
       const netProfit = grossProfit - totalFees;
       const profitMargin = subtotalPrice > 0 ? (netProfit / subtotalPrice) * 100 : 0;
 
-      // Upsert order
-      await supabase
+      // Upsert order and get the UUID back
+      const { data: upsertedOrder, error: orderError } = await supabase
         .from('orders')
         .upsert({
           store_id,
@@ -189,14 +188,26 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'store_id,shopify_order_id',
-        });
+        })
+        .select('id')
+        .single();
 
-      // Upsert line items
+      if (orderError || !upsertedOrder) {
+        console.error('❌ Order upsert error:', orderError);
+        continue;
+      }
+
+      const orderUuid = upsertedOrder.id;
+
+      // Upsert line items with the correct order UUID
       let lineItemsSynced = 0;
       for (const item of lineItems) {
         const { error: lineItemError } = await supabase
           .from('order_line_items')
-          .upsert(item, {
+          .upsert({
+            ...item,
+            order_id: orderUuid, // Use the actual UUID, not Shopify ID
+          }, {
             onConflict: 'store_id,shopify_line_item_id',
           });
         if (lineItemError) {
