@@ -42,6 +42,8 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const [bulkCogs, setBulkCogs] = useState('');
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditCosts, setBulkEditCosts] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -152,10 +154,63 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
         })
       });
       await loadProducts();
+      // Re-sync orders to recalculate profits with new COGS
+      await fetch('/api/orders/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_id: store.id })
+      });
       setShowBulkModal(false);
       setBulkCogs('');
+      alert('COGS updated and order profits recalculated!');
     } catch (err) {
       console.error('Error applying bulk COGS:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openBulkEditModal = () => {
+    // Initialize bulk edit costs with current values
+    const costs: Record<string, string> = {};
+    products.forEach(p => {
+      costs[p.id] = (p.cost_per_item || 0).toFixed(2);
+    });
+    setBulkEditCosts(costs);
+    setShowBulkEditModal(true);
+  };
+
+  const saveBulkEditCosts = async () => {
+    setSaving(true);
+    try {
+      // Update each product that changed
+      const updates = Object.entries(bulkEditCosts).map(([id, cost]) => {
+        const product = products.find(p => p.id === id);
+        const newCost = parseFloat(cost) || 0;
+        if (product && product.cost_per_item !== newCost) {
+          return fetch(`/api/products/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cost_per_item: newCost })
+          });
+        }
+        return null;
+      }).filter(Boolean);
+
+      await Promise.all(updates);
+      await loadProducts();
+
+      // Re-sync orders to recalculate profits
+      await fetch('/api/orders/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_id: store.id })
+      });
+
+      setShowBulkEditModal(false);
+      alert('COGS updated and order profits recalculated!');
+    } catch (err) {
+      console.error('Error saving bulk costs:', err);
     } finally {
       setSaving(false);
     }
@@ -258,13 +313,22 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
             Import CSV
           </button>
           <button
+            onClick={openBulkEditModal}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm font-medium transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit All Costs
+          </button>
+          <button
             onClick={() => setShowBulkModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-sm font-medium transition"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Bulk Set COGS
+            Set % COGS
           </button>
           <button
             onClick={syncProducts}
@@ -540,6 +604,81 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
                 className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition"
               >
                 Choose File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Edit Costs Modal */}
+      {showBulkEditModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-white/20 rounded-xl p-6 max-w-4xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-white">Edit Product Costs</h3>
+                <p className="text-white/60 text-sm">Set the cost (COGS) for each product. Press Tab to move between fields.</p>
+              </div>
+              <button
+                onClick={() => setShowBulkEditModal(false)}
+                className="text-white/60 hover:text-white"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              <table className="w-full">
+                <thead className="sticky top-0 bg-slate-800">
+                  <tr className="border-b border-white/10">
+                    <th className="text-left px-4 py-3 text-white/60 text-sm font-medium">Product</th>
+                    <th className="text-left px-4 py-3 text-white/60 text-sm font-medium">SKU</th>
+                    <th className="text-right px-4 py-3 text-white/60 text-sm font-medium w-32">Cost ($)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product, idx) => (
+                    <tr key={product.id} className="border-b border-white/5">
+                      <td className="px-4 py-2">
+                        <div className="text-white text-sm">{product.title}</div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="text-white/60 text-sm">{product.sku || '-'}</div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={bulkEditCosts[product.id] || ''}
+                          onChange={(e) => setBulkEditCosts({
+                            ...bulkEditCosts,
+                            [product.id]: e.target.value
+                          })}
+                          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-right focus:outline-none focus:border-emerald-500"
+                          placeholder="0.00"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-white/10 mt-4">
+              <button
+                onClick={() => setShowBulkEditModal(false)}
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveBulkEditCosts}
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 text-white rounded-lg font-medium transition"
+              >
+                {saving ? 'Saving & Recalculating...' : 'Save All & Recalculate Profits'}
               </button>
             </div>
           </div>
