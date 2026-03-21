@@ -52,7 +52,7 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [dateRangeOption, setDateRangeOption] = useState<DateRangeOption>('30d');
+  const [dateRangeOption, setDateRangeOption] = useState<DateRangeOption>('90d');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'profitable' | 'unprofitable'>('all');
   const [currentPage, setCurrentPage] = useState(1);

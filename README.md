@@ -1,187 +1,127 @@
-# ProfitPulse - Real-Time Profit Analytics for Shopify
+# ProfitPulse - Know Your True Profit on Every Order
 
-Know your true profit on every order. ProfitPulse tracks COGS, payment fees, Shopify fees, and ad spend to show you exactly how much you're making.
+**Revenue is vanity. Profit is sanity.** Shopify shows you what you sell, but not what you actually keep. ProfitPulse reveals your true profit after COGS, payment fees, Shopify fees, and shipping - so you know exactly which products and orders are making you money.
 
-## Features
+## Why ProfitPulse?
 
-- Real-time profit tracking per order
-- COGS management (per product or default %)
-- Payment processing fee calculation
-- Shopify transaction fee tracking
-- Ad spend integration (Facebook, Google)
-- Daily/weekly/monthly profit charts
-- Top products by profitability
-- Attribution tracking (UTM, ad platforms)
+Shopify's analytics show revenue, but merchants are left guessing their actual margins. Most "profit" apps charge $50-150/month and overwhelm you with features you don't need.
+
+**ProfitPulse is different:**
+- **$29.99/month flat** - No per-order fees, unlimited orders
+- **See profit in 10 seconds** - Clean dashboard, no clutter
+- **True cost visibility** - COGS, payment fees, Shopify fees, shipping - all in one place
+- **Product-level profit** - Know which products actually make money vs. which just look busy
+- **7-day free trial** - Try before you commit
+
+## What You Get
+
+### Real-Time Profit Dashboard
+- Net profit per order (not just revenue)
+- Daily/weekly/monthly profit trends
+- Profit margin % on every sale
+- Revenue vs. actual profit comparison
+
+### Product Profitability
+- Profit per product (not just sales volume)
+- Which products have the best margins
+- Which products are losing money
+- Bulk COGS management
+
+### Cost Tracking
+- Payment processing fees (2.9% + $0.30, etc.)
+- Shopify transaction fees by plan
+- Shipping costs
+- Custom expense tracking
+
+### AI Insights (Coming Soon)
+- Weekly profit summaries
+- Margin drop alerts
+- Product recommendations
 
 ## Pricing
 
-$99/month with 7-day free trial
+**$29.99/month** with 7-day free trial. Cancel anytime.
+
+Compare to:
+- BeProfit: $49-249/month
+- TrueProfit: $25-99/month
+- Lifetimely: $149/month
 
 ---
 
 ## Quick Start
 
-### 1. Clone and Install
+### 1. Install from Shopify App Store
+Search "ProfitPulse" or install directly from your Shopify admin.
+
+### 2. Set Your COGS
+Enter cost of goods sold per product, or set a default margin % for quick setup.
+
+### 3. See Your Profit
+That's it. Orders sync automatically and you'll see your true profit instantly.
+
+---
+
+## For Developers
+
+### Local Development
 
 ```bash
 cd profitpulse
 npm install
+npm run dev
 ```
 
-### 2. Set Up Supabase
+### Environment Variables
 
-1. Create project at [supabase.com](https://supabase.com)
-2. Go to SQL Editor
-3. Run the contents of `supabase_schema.sql`
-4. Copy your project URL and service role key
-
-### 3. Create Shopify App
-
-1. Go to [partners.shopify.com](https://partners.shopify.com)
-2. Create new app
-3. Set App URL: `https://profitpulse.vercel.app`
-4. Set Redirect URL: `https://profitpulse.vercel.app/api/auth/shopify/callback`
-5. Enable scopes: `read_orders`, `read_products`, `read_customers`
-6. Copy API Key and Secret
-
-### 4. Configure Environment
-
-Copy `.env.example` to `.env.local`:
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in:
+Copy `.env.example` to `.env.local` and fill in:
 - `SHOPIFY_API_KEY` - from Shopify Partners
 - `SHOPIFY_API_SECRET` - from Shopify Partners
 - `NEXT_PUBLIC_SUPABASE_URL` - from Supabase
 - `SUPABASE_SERVICE_ROLE_KEY` - from Supabase
-- `NEXT_PUBLIC_APP_URL` - your Vercel URL
+- `NEXT_PUBLIC_APP_URL` - your deployment URL
 
-### 5. Deploy to Vercel
+### Tech Stack
+- Next.js 16 + React 19
+- Tailwind CSS v4
+- Supabase (PostgreSQL)
+- Shopify App Bridge
+- Recharts
+
+### Deploy to Vercel
 
 ```bash
-npm install -g vercel
 vercel
 ```
 
-Or connect GitHub repo to Vercel for auto-deploys.
-
-### 6. Configure Webhooks in Shopify
-
-In your Shopify Partner app settings, add webhooks:
-- `orders/create` -> `https://profitpulse.vercel.app/api/webhooks/shopify/orders`
-- `orders/updated` -> `https://profitpulse.vercel.app/api/webhooks/shopify/orders`
-- `app/uninstalled` -> `https://profitpulse.vercel.app/api/webhooks/shopify/uninstall`
-
-GDPR webhooks:
-- Customer data request: `/api/webhooks/customers/data-request`
-- Customer deletion: `/api/webhooks/customers/redact`
-- Shop deletion: `/api/webhooks/shop/redact`
-
----
-
-## Shopify App Store Submission Checklist
-
-### Required for Approval
-
-- [ ] App loads without errors in embedded iframe
-- [ ] OAuth flow works (install -> billing -> dashboard)
-- [ ] Billing charges work (test with development store first)
-- [ ] GDPR webhooks configured and responding
-- [ ] App description and screenshots ready
-- [ ] Privacy policy URL
-- [ ] Support email
-
-### Testing Before Submission
-
-1. **Development Store Test**
-   ```bash
-   npm run dev
-   shopify app dev --config shopify.app.profitpulse.toml
-   ```
-
-2. **Production Test**
-   - Deploy to Vercel
-   - Install on dev store
-   - Complete billing flow
-   - Verify webhooks receive orders
-   - Check profit calculations
-
-### Common Review Issues
-
-1. **Billing not working** - Ensure `test: true` is only set for dev stores
-2. **Iframe errors** - Use App Bridge CDN, not npm package
-3. **GDPR webhooks failing** - Must return 200 even on errors
-4. **Missing scopes** - Request only what you need
-
----
-
-## API Routes
-
-| Route | Method | Description |
-|-------|--------|-------------|
-| `/api/auth/shopify/install` | GET | Start OAuth flow |
-| `/api/auth/shopify/callback` | GET | Complete OAuth, create billing |
-| `/api/billing/create` | GET/POST | Create billing charge |
-| `/api/stores/lookup` | GET | Get store by shop domain |
-| `/api/analytics/summary` | GET | Dashboard metrics |
-| `/api/products` | GET/POST | Product COGS management |
-| `/api/products/sync` | POST | Sync products from Shopify |
-| `/api/settings` | GET/POST | Store settings |
-| `/api/webhooks/shopify/orders` | POST | Order webhooks |
-| `/api/webhooks/shopify/uninstall` | POST | App uninstall |
-| `/api/webhooks/customers/*` | POST | GDPR webhooks |
-| `/api/webhooks/shop/redact` | POST | Shop data deletion |
+Or connect your GitHub repo for auto-deploys.
 
 ---
 
 ## Database Schema
 
 See `supabase_schema.sql` for full schema. Key tables:
-
 - `stores` - Shopify stores with access tokens
-- `store_settings` - Default COGS, fee rates
+- `store_settings` - Default COGS %, fee rates
 - `products` - Product-level COGS
 - `orders` - Orders with profit calculations
-- `order_line_items` - Item-level profit
-- `ad_spend` - Daily ad spend by platform
-- `ad_connections` - Connected ad accounts
+- `order_line_items` - Item-level profit breakdown
 
 ---
 
 ## Profit Calculation
 
 ```
-Revenue = subtotal_price + (shipping if included) + (tax if included)
+Revenue = subtotal_price
 COGS = sum of (quantity * cost_per_item) for all line items
 Payment Fee = (total_price * processing_rate) + fixed_fee
 Shopify Fee = total_price * shopify_plan_rate
-Net Profit = Revenue - COGS - Payment Fee - Shopify Fee - Ad Spend
+Net Profit = Revenue - COGS - Payment Fee - Shopify Fee - Shipping
 Margin = (Net Profit / Revenue) * 100
-```
-
----
-
-## Development
-
-```bash
-# Run locally
-npm run dev
-
-# With Shopify CLI (for embedded preview)
-shopify app dev --config shopify.app.profitpulse.toml
-
-# Build
-npm run build
-
-# Lint
-npm run lint
 ```
 
 ---
 
 ## Support
 
-For issues, contact: your-email@example.com
+Questions? Contact: adam@argora.ai
