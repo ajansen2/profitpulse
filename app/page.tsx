@@ -61,13 +61,28 @@ export default function Home() {
         }
 
         setLoadingMessage('Loading store data...');
-        console.log('📡 Fetching store data...');
+        const apiUrl = `/api/stores/lookup?shop=${encodeURIComponent(shop)}`;
+        console.log('📡 Fetching store data from:', apiUrl);
 
-        // Lookup store in database
+        // Lookup store in database with timeout
         let res;
         try {
-          res = await fetch(`/api/stores/lookup?shop=${encodeURIComponent(shop)}`);
-        } catch (fetchError) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            console.error('⏱️ Fetch timeout after 10 seconds');
+            controller.abort();
+          }, 10000);
+
+          res = await fetch(apiUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          console.log('📡 Fetch completed with status:', res.status);
+        } catch (fetchError: unknown) {
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            console.error('❌ Fetch aborted due to timeout');
+            setError('Request timed out. Please refresh the page.');
+            setLoading(false);
+            return;
+          }
           console.error('❌ Fetch error:', fetchError);
           throw fetchError;
         }
