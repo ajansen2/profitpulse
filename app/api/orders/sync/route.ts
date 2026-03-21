@@ -201,32 +201,55 @@ export async function POST(request: NextRequest) {
 
       // Upsert line items with the correct order UUID
       let lineItemsSynced = 0;
+      let lineItemErrors: string[] = [];
+
+      console.log(`📦 Order ${order.id}: Processing ${lineItems.length} line items, orderUuid: ${orderUuid}`);
+
       for (const item of lineItems) {
+        const lineItemData = {
+          ...item,
+          order_id: orderUuid, // Use the actual UUID, not Shopify ID
+        };
+
         const { error: lineItemError } = await supabase
           .from('order_line_items')
-          .upsert({
-            ...item,
-            order_id: orderUuid, // Use the actual UUID, not Shopify ID
-          }, {
+          .upsert(lineItemData, {
             onConflict: 'store_id,shopify_line_item_id',
           });
         if (lineItemError) {
-          console.error('❌ Line item upsert error:', lineItemError, 'Item:', item.title);
+          console.error('❌ Line item upsert error:', JSON.stringify(lineItemError), 'Item:', item.title);
+          lineItemErrors.push(`${item.title}: ${lineItemError.message}`);
         } else {
           lineItemsSynced++;
         }
       }
-      console.log(`📦 Order ${order.id}: ${lineItemsSynced}/${lineItems.length} line items synced`);
+      console.log(`📦 Order ${order.id}: ${lineItemsSynced}/${lineItems.length} line items synced, errors: ${lineItemErrors.length}`);
 
       synced++;
     }
 
     console.log('✅ Order sync complete:', synced, 'orders');
 
+    // Check how many line items are in the database after sync
+    const { data: lineItemsAfter, count: lineItemCount } = await supabase
+      .from('order_line_items')
+      .select('id, title, order_id', { count: 'exact' })
+      .eq('store_id', store_id)
+      .limit(5);
+
+    // Count line items we tried to process
+    let totalLineItemsProcessed = 0;
+    for (const order of allOrders) {
+      totalLineItemsProcessed += (order.line_items || []).length;
+    }
+
     return NextResponse.json({
       success: true,
       synced,
       total_orders: allOrders.length,
+      total_line_items_from_shopify: totalLineItemsProcessed,
+      line_items_in_db: lineItemCount || 0,
+      sample_line_items: lineItemsAfter || [],
     });
   } catch (error) {
     console.error('❌ Order sync error:', error);
