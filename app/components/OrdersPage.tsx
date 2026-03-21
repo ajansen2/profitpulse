@@ -50,6 +50,7 @@ type DateRangeOption = '7d' | '14d' | '30d' | '90d' | 'all';
 export default function OrdersPage({ store, onBack }: OrdersPageProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [dateRangeOption, setDateRangeOption] = useState<DateRangeOption>('30d');
   const [searchTerm, setSearchTerm] = useState('');
@@ -81,6 +82,27 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
       console.error('Error loading orders:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncOrders = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/orders/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_id: store.id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadOrders();
+      } else {
+        console.error('Sync failed:', data.error);
+      }
+    } catch (err) {
+      console.error('Error syncing orders:', err);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -180,6 +202,16 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
             <option value="90d">Last 90 days</option>
             <option value="all">All time</option>
           </select>
+          <button
+            onClick={syncOrders}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white rounded-lg font-medium transition"
+          >
+            <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {syncing ? 'Syncing...' : 'Sync Orders'}
+          </button>
         </div>
       </div>
 
