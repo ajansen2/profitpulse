@@ -10,7 +10,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { store_id } = body;
 
+    console.log('📦 Product sync started for store_id:', store_id);
+
     if (!store_id) {
+      console.error('❌ Missing store_id');
       return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
     }
 
@@ -27,7 +30,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (storeError || !store) {
+      console.error('❌ Store not found:', storeError);
       return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    }
+
+    console.log('🏪 Store found:', store.shop_domain);
+    console.log('🔑 Access token exists:', !!store.access_token, 'Length:', store.access_token?.length || 0);
+
+    // Check if access token is valid
+    if (!store.access_token || store.access_token === '' || store.access_token === 'revoked') {
+      console.error('❌ Invalid or missing access token');
+      return NextResponse.json({
+        error: 'No valid access token. Please reinstall the app to authorize.',
+        needsReauth: true
+      }, { status: 401 });
     }
 
     // Fetch products from Shopify (paginated)
@@ -40,6 +56,8 @@ export async function POST(request: NextRequest) {
         ? `https://${store.shop_domain}/admin/api/2024-10/products.json?limit=250&page_info=${pageInfo}`
         : `https://${store.shop_domain}/admin/api/2024-10/products.json?limit=250`;
 
+      console.log('📡 Fetching from Shopify:', url.substring(0, 80) + '...');
+
       const response = await fetch(url, {
         headers: {
           'X-Shopify-Access-Token': store.access_token,
@@ -47,9 +65,16 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      console.log('📡 Shopify response status:', response.status);
+
       if (!response.ok) {
-        console.error('Shopify API error:', response.status);
-        break;
+        const errorText = await response.text();
+        console.error('❌ Shopify API error:', response.status, errorText);
+        return NextResponse.json({
+          error: 'Shopify API error',
+          status: response.status,
+          details: errorText
+        }, { status: 500 });
       }
 
       const data = await response.json();
@@ -88,13 +113,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log('✅ Product sync complete:', synced, 'variants from', allProducts.length, 'products');
+
     return NextResponse.json({
       success: true,
       synced,
       total_products: allProducts.length,
     });
   } catch (error) {
-    console.error('Product sync error:', error);
-    return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
+    console.error('❌ Product sync error:', error);
+    return NextResponse.json({ error: 'Sync failed', details: String(error) }, { status: 500 });
   }
 }

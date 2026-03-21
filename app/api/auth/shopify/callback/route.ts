@@ -57,12 +57,14 @@ export async function GET(request: NextRequest) {
     });
 
     if (!tokenResponse.ok) {
-      console.error('❌ Token exchange failed:', tokenResponse.status);
-      return NextResponse.json({ error: 'Token exchange failed' }, { status: 500 });
+      const errorText = await tokenResponse.text();
+      console.error('❌ Token exchange failed:', tokenResponse.status, errorText);
+      return NextResponse.json({ error: 'Token exchange failed', details: errorText }, { status: 500 });
     }
 
-    const { access_token, scope } = await tokenResponse.json();
-    console.log('✅ Got access token');
+    const tokenData = await tokenResponse.json();
+    const { access_token, scope } = tokenData;
+    console.log('✅ Got access token, length:', access_token?.length, 'scope:', scope);
 
     // Get shop info
     const shopResponse = await fetch(`https://${shop}/admin/api/2024-01/shop.json`, {
