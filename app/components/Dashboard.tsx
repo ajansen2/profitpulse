@@ -12,6 +12,7 @@ interface Store {
   id: string;
   store_name: string;
   shop_domain: string;
+  email?: string;
   subscription_status: string;
   trial_ends_at: string | null;
 }

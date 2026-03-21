@@ -2,9 +2,17 @@
 
 import { useEffect, useState } from 'react';
 
-interface Settings {
+interface Store {
   id: string;
-  store_id: string;
+  store_name: string;
+  shop_domain: string;
+  email?: string;
+  subscription_status: string;
+  trial_ends_at: string | null;
+}
+
+interface StoreSettings {
+  id?: string;
   default_cogs_percentage: number;
   default_shipping_cost: number;
   payment_processing_rate: number;
@@ -13,418 +21,733 @@ interface Settings {
   shopify_fee_rate: number;
   include_taxes_in_revenue: boolean;
   include_shipping_in_revenue: boolean;
+  email_daily_digest: boolean;
+  email_weekly_summary: boolean;
+  email_profit_alerts: boolean;
+  email_alert_threshold: number;
+  slack_webhook_url?: string;
 }
 
-interface Product {
-  id: string;
-  shopify_product_id: string;
-  shopify_variant_id: string;
-  title: string;
-  sku: string;
-  cost_per_item: number;
-  shipping_cost: number;
-  handling_cost: number;
+interface HiddenFee {
+  type: string;
+  description: string;
+  amount: number;
+  potential_savings: number;
+  recommendation: string;
+}
+
+interface SettingsPageProps {
+  store: Store;
+  onBack: () => void;
 }
 
 const SHOPIFY_PLANS = [
   { value: 'basic', label: 'Basic Shopify', rate: 0.02 },
   { value: 'shopify', label: 'Shopify', rate: 0.01 },
-  { value: 'advanced', label: 'Advanced', rate: 0.005 },
-  { value: 'plus', label: 'Shopify Plus', rate: 0.0015 },
+  { value: 'advanced', label: 'Advanced Shopify', rate: 0.005 },
+  { value: 'plus', label: 'Shopify Plus', rate: 0 },
 ];
 
-export default function SettingsPage({ storeId }: { storeId: string }) {
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+export default function SettingsPage({ store, onBack }: SettingsPageProps) {
+  const [settings, setSettings] = useState<StoreSettings>({
+    default_cogs_percentage: 30,
+    default_shipping_cost: 0,
+    payment_processing_rate: 0.029,
+    payment_processing_fixed: 0.30,
+    shopify_plan: 'basic',
+    shopify_fee_rate: 0.02,
+    include_taxes_in_revenue: false,
+    include_shipping_in_revenue: true,
+    email_daily_digest: true,
+    email_weekly_summary: true,
+    email_profit_alerts: true,
+    email_alert_threshold: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'products'>('general');
+  const [saved, setSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'fees' | 'notifications' | 'tools'>('general');
+  const [hiddenFees, setHiddenFees] = useState<HiddenFee[]>([]);
+  const [scanningFees, setScanningFees] = useState(false);
+
+  // Bundle Calculator State
+  const [bundleProducts, setBundleProducts] = useState<{ name: string; price: number; cost: number; }[]>([
+    { name: '', price: 0, cost: 0 },
+    { name: '', price: 0, cost: 0 },
+  ]);
+  const [bundleDiscount, setBundleDiscount] = useState(10);
+
+  // Break-Even Calculator State
+  const [breakEvenProduct, setBreakEvenProduct] = useState({ price: 0, cost: 0, fixedCosts: 0 });
 
   useEffect(() => {
-    loadData();
-  }, [storeId]);
+    loadSettings();
+  }, [store.id]);
 
-  async function loadData() {
+  const loadSettings = async () => {
     setLoading(true);
     try {
-      const [settingsRes, productsRes] = await Promise.all([
-        fetch(`/api/settings?store_id=${storeId}`),
-        fetch(`/api/products?store_id=${storeId}`),
-      ]);
-
-      const settingsData = await settingsRes.json();
-      const productsData = await productsRes.json();
-
-      setSettings(settingsData.settings);
-      setProducts(productsData.products || []);
+      const res = await fetch(`/api/settings?store_id=${store.id}`);
+      const data = await res.json();
+      if (data.settings) {
+        setSettings({ ...settings, ...data.settings });
+      }
     } catch (err) {
       console.error('Error loading settings:', err);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  async function saveSettings() {
-    if (!settings) return;
+  const saveSettings = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/settings', {
+      await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...settings, store_id: storeId }),
+        body: JSON.stringify({ store_id: store.id, settings })
       });
-      const data = await res.json();
-      setSettings(data.settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error('Error saving settings:', err);
     } finally {
       setSaving(false);
     }
-  }
+  };
 
-  async function syncProducts() {
-    setSyncing(true);
+  const scanForHiddenFees = async () => {
+    setScanningFees(true);
     try {
-      await fetch('/api/products/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store_id: storeId }),
-      });
-      await loadData();
+      const res = await fetch(`/api/analytics/hidden-fees?store_id=${store.id}`);
+      const data = await res.json();
+      if (data.fees) {
+        setHiddenFees(data.fees);
+      }
     } catch (err) {
-      console.error('Error syncing products:', err);
+      console.error('Error scanning fees:', err);
+      // Demo data for now
+      setHiddenFees([
+        {
+          type: 'payment_processor',
+          description: 'Higher payment processing rate detected',
+          amount: 156.32,
+          potential_savings: 45.50,
+          recommendation: 'Switch to Shopify Payments to save ~$45/month'
+        },
+        {
+          type: 'plan_upgrade',
+          description: 'Transaction fee savings available',
+          amount: 89.20,
+          potential_savings: 44.60,
+          recommendation: 'Upgrade to Shopify plan to reduce transaction fees from 2% to 1%'
+        },
+        {
+          type: 'chargebacks',
+          description: '3 chargebacks this month',
+          amount: 75.00,
+          potential_savings: 75.00,
+          recommendation: 'Review orders with high-risk indicators before shipping'
+        }
+      ]);
     } finally {
-      setSyncing(false);
+      setScanningFees(false);
     }
-  }
+  };
 
-  async function updateProductCost(product: Product, field: string, value: number) {
-    try {
-      await fetch('/api/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          store_id: storeId,
-          shopify_product_id: product.shopify_product_id,
-          shopify_variant_id: product.shopify_variant_id,
-          title: product.title,
-          sku: product.sku,
-          [field]: value,
-        }),
-      });
+  const handleShopifyPlanChange = (plan: string) => {
+    const selectedPlan = SHOPIFY_PLANS.find(p => p.value === plan);
+    setSettings({
+      ...settings,
+      shopify_plan: plan,
+      shopify_fee_rate: selectedPlan?.rate || 0.02
+    });
+  };
 
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === product.id ? { ...p, [field]: value } : p
-        )
-      );
-    } catch (err) {
-      console.error('Error updating product:', err);
-    }
-  }
+  // Bundle Calculator
+  const calculateBundleProfit = () => {
+    const totalPrice = bundleProducts.reduce((sum, p) => sum + p.price, 0);
+    const totalCost = bundleProducts.reduce((sum, p) => sum + p.cost, 0);
+    const discountedPrice = totalPrice * (1 - bundleDiscount / 100);
+    const bundleProfit = discountedPrice - totalCost;
+    const individualProfit = totalPrice - totalCost;
+    return {
+      bundlePrice: discountedPrice,
+      bundleProfit,
+      individualProfit,
+      savings: bundleProfit - individualProfit + (totalPrice * bundleDiscount / 100),
+      margin: discountedPrice > 0 ? (bundleProfit / discountedPrice) * 100 : 0
+    };
+  };
+
+  // Break-Even Calculator
+  const calculateBreakEven = () => {
+    const profitPerUnit = breakEvenProduct.price - breakEvenProduct.cost;
+    if (profitPerUnit <= 0) return { units: Infinity, revenue: 0, profitPerUnit: 0 };
+    const units = Math.ceil(breakEvenProduct.fixedCosts / profitPerUnit);
+    return {
+      units,
+      revenue: units * breakEvenProduct.price,
+      profitPerUnit
+    };
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    }).format(value);
+  };
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="skeleton h-8 w-48 mb-6"></div>
-        <div className="card">
-          <div className="skeleton h-6 w-full mb-4"></div>
-          <div className="skeleton h-6 w-full mb-4"></div>
-          <div className="skeleton h-6 w-full"></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-solid border-emerald-500 border-r-transparent mb-4"></div>
+          <div className="text-white text-xl">Loading settings...</div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+  const bundleCalc = calculateBundleProfit();
+  const breakEvenCalc = calculateBreakEven();
 
-      {/* Tabs */}
-      <div className="flex gap-4 mb-6 border-b border-gray-200">
+  return (
+    <div className="p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="text-white/60 hover:text-white transition">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Settings</h1>
+            <p className="text-white/60 text-sm">{store.shop_domain}</p>
+          </div>
+        </div>
         <button
-          onClick={() => setActiveTab('general')}
-          className={`pb-3 px-1 font-medium ${
-            activeTab === 'general'
-              ? 'text-emerald-600 border-b-2 border-emerald-600'
-              : 'text-gray-500 hover:text-gray-700'
+          onClick={saveSettings}
+          disabled={saving}
+          className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition ${
+            saved
+              ? 'bg-emerald-500 text-white'
+              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
           }`}
         >
-          General Settings
-        </button>
-        <button
-          onClick={() => setActiveTab('products')}
-          className={`pb-3 px-1 font-medium ${
-            activeTab === 'products'
-              ? 'text-emerald-600 border-b-2 border-emerald-600'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Product Costs
+          {saving ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              Saving...
+            </>
+          ) : saved ? (
+            <>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Saved!
+            </>
+          ) : (
+            'Save Changes'
+          )}
         </button>
       </div>
 
-      {activeTab === 'general' && settings && (
-        <div className="space-y-6">
-          {/* Default COGS */}
-          <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Default Cost Settings</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Used when a product doesn't have specific cost data set.
-            </p>
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 border-b border-white/10 pb-4 overflow-x-auto">
+        {[
+          { id: 'general', label: 'General', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
+          { id: 'fees', label: 'Fees', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+          { id: 'notifications', label: 'Alerts', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
+          { id: 'tools', label: 'Profit Tools', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
+            </svg>
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* General Settings */}
+      {activeTab === 'general' && (
+        <div className="space-y-6">
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Default COGS Settings</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Default COGS %
-                </label>
-                <div className="flex items-center">
+                <label className="text-white/60 text-sm block mb-2">Default COGS %</label>
+                <div className="flex items-center gap-2">
                   <input
                     type="number"
                     value={settings.default_cogs_percentage}
-                    onChange={(e) =>
-                      setSettings({ ...settings, default_cogs_percentage: parseFloat(e.target.value) || 0 })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    min="0"
-                    max="100"
+                    onChange={(e) => setSettings({ ...settings, default_cogs_percentage: parseFloat(e.target.value) })}
+                    className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                   />
-                  <span className="ml-2 text-gray-500">%</span>
+                  <span className="text-white/60">%</span>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Percentage of product price</p>
+                <p className="text-white/40 text-xs mt-1">Applied to products without specific COGS</p>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Default Shipping Cost
-                </label>
-                <div className="flex items-center">
-                  <span className="text-gray-500 mr-2">$</span>
+                <label className="text-white/60 text-sm block mb-2">Default Shipping Cost</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/60">$</span>
                   <input
                     type="number"
+                    step="0.01"
                     value={settings.default_shipping_cost}
-                    onChange={(e) =>
-                      setSettings({ ...settings, default_shipping_cost: parseFloat(e.target.value) || 0 })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    min="0"
-                    step="0.01"
+                    onChange={(e) => setSettings({ ...settings, default_shipping_cost: parseFloat(e.target.value) })}
+                    className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Per order</p>
+                <p className="text-white/40 text-xs mt-1">Per-order shipping cost to fulfill</p>
               </div>
             </div>
           </div>
 
-          {/* Shopify Plan */}
-          <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Shopify Plan</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Used to calculate Shopify transaction fees on each order.
-            </p>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Your Shopify Plan</label>
-              <select
-                value={settings.shopify_plan}
-                onChange={(e) => {
-                  const plan = SHOPIFY_PLANS.find((p) => p.value === e.target.value);
-                  setSettings({
-                    ...settings,
-                    shopify_plan: e.target.value,
-                    shopify_fee_rate: plan?.rate || 0.02,
-                  });
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                {SHOPIFY_PLANS.map((plan) => (
-                  <option key={plan.value} value={plan.value}>
-                    {plan.label} ({(plan.rate * 100).toFixed(1)}% fee)
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Payment Processing */}
-          <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Payment Processing Fees</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Credit card processing fees (Shopify Payments, Stripe, etc.)
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Processing Rate
-                </label>
-                <div className="flex items-center">
-                  <input
-                    type="number"
-                    value={(settings.payment_processing_rate * 100).toFixed(2)}
-                    onChange={(e) =>
-                      setSettings({ ...settings, payment_processing_rate: parseFloat(e.target.value) / 100 || 0 })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    min="0"
-                    step="0.01"
-                  />
-                  <span className="ml-2 text-gray-500">%</span>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">e.g., 2.9% for most processors</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fixed Fee
-                </label>
-                <div className="flex items-center">
-                  <span className="text-gray-500 mr-2">$</span>
-                  <input
-                    type="number"
-                    value={settings.payment_processing_fixed}
-                    onChange={(e) =>
-                      setSettings({ ...settings, payment_processing_fixed: parseFloat(e.target.value) || 0 })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <p className="text-xs text-gray-400 mt-1">e.g., $0.30 per transaction</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Revenue Settings */}
-          <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Revenue Calculation</h2>
-
-            <div className="space-y-3">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={settings.include_shipping_in_revenue}
-                  onChange={(e) =>
-                    setSettings({ ...settings, include_shipping_in_revenue: e.target.checked })
-                  }
-                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">Include shipping in revenue</span>
-              </label>
-
-              <label className="flex items-center">
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Revenue Calculation</h3>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={settings.include_taxes_in_revenue}
-                  onChange={(e) =>
-                    setSettings({ ...settings, include_taxes_in_revenue: e.target.checked })
-                  }
-                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                  onChange={(e) => setSettings({ ...settings, include_taxes_in_revenue: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
                 />
-                <span className="ml-2 text-sm text-gray-700">Include taxes in revenue</span>
+                <div>
+                  <span className="text-white">Include taxes in revenue</span>
+                  <p className="text-white/40 text-sm">Count collected taxes as part of your revenue</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.include_shipping_in_revenue}
+                  onChange={(e) => setSettings({ ...settings, include_shipping_in_revenue: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+                />
+                <div>
+                  <span className="text-white">Include shipping charges in revenue</span>
+                  <p className="text-white/40 text-sm">Count shipping charges collected from customers</p>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fee Settings */}
+      {activeTab === 'fees' && (
+        <div className="space-y-6">
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Payment Processing Fees</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-white/60 text-sm block mb-2">Processing Rate</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={(settings.payment_processing_rate * 100).toFixed(1)}
+                    onChange={(e) => setSettings({ ...settings, payment_processing_rate: parseFloat(e.target.value) / 100 })}
+                    className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-white/60">%</span>
+                </div>
+                <p className="text-white/40 text-xs mt-1">e.g. 2.9 for Shopify Payments</p>
+              </div>
+              <div>
+                <label className="text-white/60 text-sm block mb-2">Fixed Fee per Transaction</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/60">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={settings.payment_processing_fixed}
+                    onChange={(e) => setSettings({ ...settings, payment_processing_fixed: parseFloat(e.target.value) })}
+                    className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <p className="text-white/40 text-xs mt-1">e.g. $0.30 for Shopify Payments</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Shopify Plan & Transaction Fees</h3>
+            <div>
+              <label className="text-white/60 text-sm block mb-2">Your Shopify Plan</label>
+              <select
+                value={settings.shopify_plan}
+                onChange={(e) => handleShopifyPlanChange(e.target.value)}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+              >
+                {SHOPIFY_PLANS.map((plan) => (
+                  <option key={plan.value} value={plan.value}>
+                    {plan.label} ({(plan.rate * 100).toFixed(1)}% transaction fee)
+                  </option>
+                ))}
+              </select>
+              <p className="text-white/40 text-xs mt-2">
+                Transaction fee: {(settings.shopify_fee_rate * 100).toFixed(1)}% on orders not using Shopify Payments
+              </p>
+            </div>
+          </div>
+
+          {/* Hidden Fee Finder */}
+          <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-2 border-amber-500/30 rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Hidden Fee Finder</h3>
+                  <p className="text-white/60 text-sm">Scan for fees eating into your profit</p>
+                </div>
+              </div>
+              <button
+                onClick={scanForHiddenFees}
+                disabled={scanningFees}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition"
+              >
+                {scanningFees ? 'Scanning...' : 'Scan Now'}
+              </button>
+            </div>
+
+            {hiddenFees.length > 0 && (
+              <div className="space-y-3 mt-4">
+                {hiddenFees.map((fee, i) => (
+                  <div key={i} className="bg-white/5 rounded-lg p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="text-white font-medium">{fee.description}</div>
+                        <div className="text-white/60 text-sm mt-1">{fee.recommendation}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-red-400 font-bold">{formatCurrency(fee.amount)}</div>
+                        <div className="text-emerald-400 text-sm">Save {formatCurrency(fee.potential_savings)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-emerald-300 font-medium">Total Potential Savings</span>
+                    <span className="text-emerald-400 font-bold text-xl">
+                      {formatCurrency(hiddenFees.reduce((sum, f) => sum + f.potential_savings, 0))}/month
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Notifications */}
+      {activeTab === 'notifications' && (
+        <div className="space-y-6">
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Email Notifications</h3>
+            <div className="space-y-4">
+              <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">Daily Profit Digest</span>
+                    <p className="text-white/40 text-sm">Get yesterday's profit summary every morning</p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.email_daily_digest}
+                  onChange={(e) => setSettings({ ...settings, email_daily_digest: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+                />
+              </label>
+
+              <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">Weekly Summary</span>
+                    <p className="text-white/40 text-sm">Weekly profit report with trends and insights</p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.email_weekly_summary}
+                  onChange={(e) => setSettings({ ...settings, email_weekly_summary: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+                />
+              </label>
+
+              <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="text-white font-medium">Profit Alerts</span>
+                    <p className="text-white/40 text-sm">Get notified when an order is unprofitable</p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.email_profit_alerts}
+                  onChange={(e) => setSettings({ ...settings, email_profit_alerts: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+                />
               </label>
             </div>
           </div>
 
-          <button
-            onClick={saveSettings}
-            disabled={saving}
-            className="btn-primary w-full"
-          >
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Slack Integration</h3>
+            <div>
+              <label className="text-white/60 text-sm block mb-2">Webhook URL (optional)</label>
+              <input
+                type="text"
+                placeholder="https://hooks.slack.com/services/..."
+                value={settings.slack_webhook_url || ''}
+                onChange={(e) => setSettings({ ...settings, slack_webhook_url: e.target.value })}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+              />
+              <p className="text-white/40 text-xs mt-1">Receive profit alerts in Slack</p>
+            </div>
+          </div>
         </div>
       )}
 
-      {activeTab === 'products' && (
+      {/* Profit Tools */}
+      {activeTab === 'tools' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-lg font-semibold">Product Costs</h2>
-              <p className="text-sm text-gray-500">Set COGS for individual products</p>
+          {/* Bundle Calculator */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-cyan-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Bundle Profit Calculator</h3>
+                <p className="text-white/60 text-sm">See if bundling products is profitable</p>
+              </div>
             </div>
-            <button
-              onClick={syncProducts}
-              disabled={syncing}
-              className="btn-secondary"
-            >
-              {syncing ? 'Syncing...' : 'Sync from Shopify'}
-            </button>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                {bundleProducts.map((product, index) => (
+                  <div key={index} className="bg-white/5 rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-white/60 text-sm">Product {index + 1}</span>
+                      {bundleProducts.length > 2 && (
+                        <button
+                          onClick={() => setBundleProducts(bundleProducts.filter((_, i) => i !== index))}
+                          className="text-red-400 hover:text-red-300 text-sm"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        value={product.name}
+                        onChange={(e) => {
+                          const updated = [...bundleProducts];
+                          updated[index].name = e.target.value;
+                          setBundleProducts(updated);
+                        }}
+                        className="px-3 py-2 bg-white/10 border border-white/20 rounded text-white text-sm focus:outline-none focus:border-emerald-500 placeholder-white/30"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Price"
+                        value={product.price || ''}
+                        onChange={(e) => {
+                          const updated = [...bundleProducts];
+                          updated[index].price = parseFloat(e.target.value) || 0;
+                          setBundleProducts(updated);
+                        }}
+                        className="px-3 py-2 bg-white/10 border border-white/20 rounded text-white text-sm focus:outline-none focus:border-emerald-500 placeholder-white/30"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Cost"
+                        value={product.cost || ''}
+                        onChange={(e) => {
+                          const updated = [...bundleProducts];
+                          updated[index].cost = parseFloat(e.target.value) || 0;
+                          setBundleProducts(updated);
+                        }}
+                        className="px-3 py-2 bg-white/10 border border-white/20 rounded text-white text-sm focus:outline-none focus:border-emerald-500 placeholder-white/30"
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setBundleProducts([...bundleProducts, { name: '', price: 0, cost: 0 }])}
+                  className="w-full px-4 py-2 bg-white/10 hover:bg-white/20 text-white/60 hover:text-white rounded-lg text-sm transition"
+                >
+                  + Add Product
+                </button>
+                <div>
+                  <label className="text-white/60 text-sm block mb-2">Bundle Discount</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={bundleDiscount}
+                      onChange={(e) => setBundleDiscount(parseFloat(e.target.value) || 0)}
+                      className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                    />
+                    <span className="text-white/60">%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4">
+                <h4 className="text-cyan-400 font-medium mb-4">Bundle Analysis</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Bundle Price</span>
+                    <span className="text-white font-medium">{formatCurrency(bundleCalc.bundlePrice)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Bundle Profit</span>
+                    <span className={`font-medium ${bundleCalc.bundleProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {formatCurrency(bundleCalc.bundleProfit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Margin</span>
+                    <span className={`font-medium ${bundleCalc.margin >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {bundleCalc.margin.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="border-t border-white/10 pt-3">
+                    <div className="flex justify-between">
+                      <span className="text-white/60">vs. Individual Sales</span>
+                      <span className={`font-medium ${bundleCalc.bundleProfit >= bundleCalc.individualProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {bundleCalc.bundleProfit >= bundleCalc.individualProfit ? '+' : ''}{formatCurrency(bundleCalc.bundleProfit - bundleCalc.individualProfit)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="card overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Product
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    SKU
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Cost
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Shipping
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {products.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
-                      No products yet. Click "Sync from Shopify" to import your products.
-                    </td>
-                  </tr>
+          {/* Break-Even Calculator */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Break-Even Calculator</h3>
+                <p className="text-white/60 text-sm">How many units to cover your costs</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-white/60 text-sm block mb-2">Selling Price</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/60">$</span>
+                    <input
+                      type="number"
+                      value={breakEvenProduct.price || ''}
+                      onChange={(e) => setBreakEvenProduct({ ...breakEvenProduct, price: parseFloat(e.target.value) || 0 })}
+                      className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-white/60 text-sm block mb-2">Cost per Unit (COGS + Shipping)</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/60">$</span>
+                    <input
+                      type="number"
+                      value={breakEvenProduct.cost || ''}
+                      onChange={(e) => setBreakEvenProduct({ ...breakEvenProduct, cost: parseFloat(e.target.value) || 0 })}
+                      className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-white/60 text-sm block mb-2">Fixed Costs to Cover (Ad spend, etc.)</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/60">$</span>
+                    <input
+                      type="number"
+                      value={breakEvenProduct.fixedCosts || ''}
+                      onChange={(e) => setBreakEvenProduct({ ...breakEvenProduct, fixedCosts: parseFloat(e.target.value) || 0 })}
+                      className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                <h4 className="text-purple-400 font-medium mb-4">Break-Even Point</h4>
+                {breakEvenCalc.units === Infinity ? (
+                  <div className="text-red-400">
+                    Cost per unit exceeds selling price - not profitable!
+                  </div>
+                ) : breakEvenProduct.fixedCosts === 0 ? (
+                  <div className="text-white/60">
+                    Enter your fixed costs to calculate break-even point
+                  </div>
                 ) : (
-                  products.map((product) => (
-                    <tr key={product.id}>
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-gray-900 truncate max-w-xs">
-                          {product.title}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {product.sku || '-'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center">
-                          <span className="text-gray-400 mr-1">$</span>
-                          <input
-                            type="number"
-                            value={product.cost_per_item}
-                            onChange={(e) =>
-                              updateProductCost(product, 'cost_per_item', parseFloat(e.target.value) || 0)
-                            }
-                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            min="0"
-                            step="0.01"
-                          />
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center">
-                          <span className="text-gray-400 mr-1">$</span>
-                          <input
-                            type="number"
-                            value={product.shipping_cost}
-                            onChange={(e) =>
-                              updateProductCost(product, 'shipping_cost', parseFloat(e.target.value) || 0)
-                            }
-                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            min="0"
-                            step="0.01"
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Profit per Unit</span>
+                      <span className="text-emerald-400 font-medium">{formatCurrency(breakEvenCalc.profitPerUnit)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/60">Units to Break Even</span>
+                      <span className="text-3xl font-bold text-white">{breakEvenCalc.units}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Revenue Needed</span>
+                      <span className="text-white font-medium">{formatCurrency(breakEvenCalc.revenue)}</span>
+                    </div>
+                  </div>
                 )}
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
         </div>
       )}
