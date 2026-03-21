@@ -14,8 +14,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Shopify App Bridge CDN - Required for embedded apps */}
-        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" defer></script>
+        {/* Shopify App Bridge CDN - Required for embedded apps - NO defer/async */}
+        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
       </head>
       <body className="bg-gray-50 text-gray-900 antialiased">
         {children}

@@ -1,0 +1,24 @@
+# ProfitPulse Shopify App Configuration
+# Learn more: https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "8d2e3d5d49c8c9253a5781ae3e8a02da"
+name = "ProfitPulse"
+application_url = "https://profitpulse-woad.vercel.app"
+embedded = true
+
+[webhooks]
+api_version = "2024-10"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "https://profitpulse-woad.vercel.app/api/webhooks/shopify/uninstall"
+
+[access_scopes]
+scopes = "read_orders,read_products"
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = ["https://profitpulse-woad.vercel.app/api/auth/shopify/callback"]
+
+[pos]
+embedded = false

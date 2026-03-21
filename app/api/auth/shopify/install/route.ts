@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${request.headers.get('host')}`;
     const redirectUri = `${appUrl}/api/auth/shopify/callback`;
-    const clientId = process.env.SHOPIFY_CLIENT_ID;
+    const clientId = process.env.SHOPIFY_API_KEY;
 
     console.log('🚀 Starting OAuth for shop:', shop);
 

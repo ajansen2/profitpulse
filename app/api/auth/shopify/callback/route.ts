@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: process.env.SHOPIFY_CLIENT_ID,
+        client_id: process.env.SHOPIFY_API_KEY,
         client_secret: process.env.SHOPIFY_API_SECRET,
         code,
       }),
@@ -76,33 +76,70 @@ export async function GET(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    console.log('🏪 Checking for existing store:', shop);
+
+    // Check if store already exists
+    const { data: existingStore } = await supabase
+      .from('stores')
+      .select('*')
+      .eq('shop_domain', shop)
+      .maybeSingle();
+
+    let store;
     const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: store, error: storeError } = await supabase
-      .from('stores')
-      .upsert({
-        shop_domain: shop,
-        store_name: shopData.shop.name,
-        email: shopData.shop.email,
-        access_token,
-        scope,
-        subscription_status: 'trial',
-        trial_ends_at: trialEndsAt,
-        currency: shopData.shop.currency,
-        timezone: shopData.shop.iana_timezone,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'shop_domain',
-      })
-      .select()
-      .single();
+    if (existingStore) {
+      console.log('✅ Store exists, updating...');
+      // Update existing store
+      const { data: updatedStore, error: updateError } = await supabase
+        .from('stores')
+        .update({
+          access_token,
+          scope,
+          store_name: shopData.shop.name,
+          email: shopData.shop.email,
+          currency: shopData.shop.currency,
+          timezone: shopData.shop.iana_timezone,
+          subscription_status: 'trial',
+          trial_ends_at: trialEndsAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingStore.id)
+        .select()
+        .single();
 
-    if (storeError) {
-      console.error('❌ Failed to save store:', storeError);
-      return NextResponse.json({ error: 'Database error' }, { status: 500 });
+      if (updateError) {
+        console.error('❌ Failed to update store:', updateError);
+        return NextResponse.json({ error: 'Database error' }, { status: 500 });
+      }
+      store = updatedStore;
+    } else {
+      console.log('🆕 Creating new store...');
+      // Create new store
+      const { data: newStore, error: insertError } = await supabase
+        .from('stores')
+        .insert({
+          shop_domain: shop,
+          store_name: shopData.shop.name,
+          email: shopData.shop.email,
+          access_token,
+          scope,
+          subscription_status: 'trial',
+          trial_ends_at: trialEndsAt,
+          currency: shopData.shop.currency,
+          timezone: shopData.shop.iana_timezone,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('❌ Failed to create store:', insertError);
+        return NextResponse.json({ error: 'Database error' }, { status: 500 });
+      }
+      store = newStore;
     }
 
-    console.log('✅ Store saved:', store.id);
+    console.log('✅ Store ready:', store.id);
 
     // Create default store settings
     await supabase
@@ -117,28 +154,25 @@ export async function GET(request: NextRequest) {
         onConflict: 'store_id',
       });
 
-    // Register webhooks
+    // Register webhooks (only app/uninstalled - orders require protected customer data access)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-    const webhooks = [
-      { topic: 'orders/create', address: `${appUrl}/api/webhooks/shopify/orders` },
-      { topic: 'orders/updated', address: `${appUrl}/api/webhooks/shopify/orders` },
-      { topic: 'app/uninstalled', address: `${appUrl}/api/webhooks/shopify/uninstall` },
-    ];
-
-    for (const webhook of webhooks) {
-      try {
-        await fetch(`https://${shop}/admin/api/2024-01/webhooks.json`, {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': access_token,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ webhook }),
-        });
-        console.log('✅ Registered webhook:', webhook.topic);
-      } catch (e) {
-        console.log('⚠️ Webhook registration failed:', webhook.topic);
-      }
+    try {
+      await fetch(`https://${shop}/admin/api/2024-01/webhooks.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': access_token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          webhook: {
+            topic: 'app/uninstalled',
+            address: `${appUrl}/api/webhooks/shopify/uninstall`
+          }
+        }),
+      });
+      console.log('✅ Registered app/uninstalled webhook');
+    } catch (e) {
+      console.log('⚠️ Webhook registration failed');
     }
 
     // Create billing charge
@@ -146,7 +180,7 @@ export async function GET(request: NextRequest) {
 
     const isTestStore = shop.includes('-test') || shop.includes('development');
     const shopName = shop.replace('.myshopify.com', '');
-    const clientId = process.env.SHOPIFY_CLIENT_ID;
+    const clientId = process.env.SHOPIFY_API_KEY;
     const returnUrl = `https://admin.shopify.com/store/${shopName}/apps/${clientId}`;
 
     const chargeResponse = await fetch(`https://${shop}/admin/api/2024-01/recurring_application_charges.json`, {
@@ -157,8 +191,8 @@ export async function GET(request: NextRequest) {
       },
       body: JSON.stringify({
         recurring_application_charge: {
-          name: 'ProfitPulse - Pro Plan',
-          price: 99.00,
+          name: 'ProfitPulse Pro',
+          price: 29.99,
           trial_days: 7,
           return_url: returnUrl,
           // IMPORTANT: Only include test flag for dev/test stores
