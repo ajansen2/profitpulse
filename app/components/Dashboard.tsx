@@ -98,7 +98,9 @@ export default function Dashboard({ store }: { store: Store }) {
         const res = await fetch(`/api/analytics/summary?store_id=${store.id}&days=${dateRange.days}`);
 
         if (!res.ok) {
-          console.warn('Analytics API returned:', res.status);
+          const errorData = await res.json().catch(() => ({}));
+          console.warn('Analytics API error:', res.status, errorData);
+          // If subscription issue, the user will see the trial banner / upgrade prompt
           // Set empty analytics on error
           setAnalytics({
             summary: {
