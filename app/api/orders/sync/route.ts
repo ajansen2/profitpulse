@@ -199,31 +199,59 @@ export async function POST(request: NextRequest) {
 
       const orderUuid = upsertedOrder.id;
 
-      // Upsert line items with the correct order UUID
+      // Insert line items with the correct order UUID
       let lineItemsSynced = 0;
-      let lineItemErrors: string[] = [];
+      const lineItemErrors: { item: string; error: any; data: any }[] = [];
 
       console.log(`📦 Order ${order.id}: Processing ${lineItems.length} line items, orderUuid: ${orderUuid}`);
 
       for (const item of lineItems) {
         const lineItemData = {
-          ...item,
-          order_id: orderUuid, // Use the actual UUID, not Shopify ID
+          store_id: item.store_id,
+          order_id: orderUuid,
+          shopify_line_item_id: item.shopify_line_item_id,
+          shopify_product_id: item.shopify_product_id,
+          shopify_variant_id: item.shopify_variant_id,
+          title: item.title,
+          quantity: item.quantity,
+          price: item.price,
+          total_price: item.total_price,
+          cost_per_item: item.cost_per_item,
+          total_cost: item.total_cost,
+          profit: item.profit,
         };
 
-        const { error: lineItemError } = await supabase
+        // Try insert first, if conflict then update
+        const { data: inserted, error: insertError } = await supabase
           .from('order_line_items')
-          .upsert(lineItemData, {
-            onConflict: 'store_id,shopify_line_item_id',
-          });
-        if (lineItemError) {
-          console.error('❌ Line item upsert error:', JSON.stringify(lineItemError), 'Item:', item.title);
-          lineItemErrors.push(`${item.title}: ${lineItemError.message}`);
+          .insert(lineItemData)
+          .select()
+          .single();
+
+        if (insertError) {
+          // If duplicate, try update
+          if (insertError.code === '23505') {
+            const { error: updateError } = await supabase
+              .from('order_line_items')
+              .update(lineItemData)
+              .eq('store_id', item.store_id)
+              .eq('shopify_line_item_id', item.shopify_line_item_id);
+            if (updateError) {
+              lineItemErrors.push({ item: item.title, error: updateError, data: lineItemData });
+            } else {
+              lineItemsSynced++;
+            }
+          } else {
+            lineItemErrors.push({ item: item.title, error: insertError, data: lineItemData });
+          }
         } else {
           lineItemsSynced++;
         }
       }
       console.log(`📦 Order ${order.id}: ${lineItemsSynced}/${lineItems.length} line items synced, errors: ${lineItemErrors.length}`);
+      if (lineItemErrors.length > 0) {
+        console.error('Line item errors:', JSON.stringify(lineItemErrors[0]));
+      }
 
       synced++;
     }
@@ -239,8 +267,30 @@ export async function POST(request: NextRequest) {
 
     // Count line items we tried to process
     let totalLineItemsProcessed = 0;
+    let allLineItemErrors: any[] = [];
     for (const order of allOrders) {
       totalLineItemsProcessed += (order.line_items || []).length;
+    }
+
+    // Try one test insert to capture error
+    const testLineItem = {
+      store_id: store_id,
+      order_id: '00000000-0000-0000-0000-000000000000', // test UUID
+      shopify_line_item_id: 'test_' + Date.now(),
+      title: 'Test Item',
+      quantity: 1,
+      price: 10,
+    };
+    const { error: testError } = await supabase
+      .from('order_line_items')
+      .insert(testLineItem);
+
+    // Delete test item
+    if (!testError) {
+      await supabase
+        .from('order_line_items')
+        .delete()
+        .eq('shopify_line_item_id', testLineItem.shopify_line_item_id);
     }
 
     return NextResponse.json({
@@ -250,6 +300,7 @@ export async function POST(request: NextRequest) {
       total_line_items_from_shopify: totalLineItemsProcessed,
       line_items_in_db: lineItemCount || 0,
       sample_line_items: lineItemsAfter || [],
+      test_insert_error: testError,
     });
   } catch (error) {
     console.error('❌ Order sync error:', error);
