@@ -85,22 +85,35 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
     }
   };
 
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
+
   const syncOrders = async () => {
     setSyncing(true);
+    setSyncError(null);
+    setSyncSuccess(null);
     try {
+      console.log('📦 Starting order sync for store:', store.id);
       const res = await fetch('/api/orders/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ store_id: store.id })
       });
       const data = await res.json();
+      console.log('📦 Sync response:', data);
       if (data.success) {
+        setSyncSuccess(`Synced ${data.synced} orders successfully!`);
         await loadOrders();
       } else {
         console.error('Sync failed:', data.error);
+        setSyncError(data.error || 'Sync failed');
+        if (data.needsReauth) {
+          setSyncError('Access token expired. Please reinstall the app from Shopify.');
+        }
       }
     } catch (err) {
       console.error('Error syncing orders:', err);
+      setSyncError('Network error - check console');
     } finally {
       setSyncing(false);
     }
@@ -214,6 +227,18 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
           </button>
         </div>
       </div>
+
+      {/* Sync Messages */}
+      {syncError && (
+        <div className="mb-4 p-4 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400">
+          <strong>Sync Error:</strong> {syncError}
+        </div>
+      )}
+      {syncSuccess && (
+        <div className="mb-4 p-4 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-emerald-400">
+          {syncSuccess}
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
