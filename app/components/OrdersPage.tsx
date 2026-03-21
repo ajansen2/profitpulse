@@ -105,11 +105,18 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
         setSyncSuccess(`Synced ${data.synced} orders successfully!`);
         await loadOrders();
       } else {
-        console.error('Sync failed:', data.error);
-        setSyncError(data.error || 'Sync failed');
-        if (data.needsReauth) {
-          setSyncError('Access token expired. Please reinstall the app from Shopify.');
+        console.error('Sync failed:', data);
+        let errorMsg = data.error || 'Sync failed';
+        if (data.details) {
+          errorMsg += ` - ${data.details}`;
         }
+        if (data.status) {
+          errorMsg += ` (Status: ${data.status})`;
+        }
+        if (data.needsReauth) {
+          errorMsg = 'Access token expired. Please reinstall the app from Shopify.';
+        }
+        setSyncError(errorMsg);
       }
     } catch (err) {
       console.error('Error syncing orders:', err);
