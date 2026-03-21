@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { useEffect, useState, useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import Link from 'next/link';
 
 interface Store {
   id: string;
@@ -39,36 +40,102 @@ interface TopProduct {
   profit: number;
   revenue: number;
   quantity: number;
+  margin: number;
+}
+
+interface RecentOrder {
+  id: string;
+  order_number: string;
+  total_price: number;
+  net_profit: number;
+  profit_margin: number;
+  created_at: string;
 }
 
 interface AnalyticsData {
   summary: Summary;
   chartData: ChartData[];
   topProducts: TopProduct[];
-  recentOrders: any[];
+  recentOrders: RecentOrder[];
 }
+
+type DateRangeOption = '7d' | '14d' | '30d' | '90d';
 
 export default function Dashboard({ store }: { store: Store }) {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState(30);
+  const [dateRangeOption, setDateRangeOption] = useState<DateRangeOption>('30d');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activePage, setActivePage] = useState('dashboard');
+
+  const dateRange = useMemo(() => {
+    const days = dateRangeOption === '7d' ? 7 : dateRangeOption === '14d' ? 14 : dateRangeOption === '30d' ? 30 : 90;
+    return { days, label: `Last ${days} days` };
+  }, [dateRangeOption]);
 
   useEffect(() => {
     async function loadAnalytics() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/analytics/summary?store_id=${store.id}&days=${dateRange}`);
+        const res = await fetch(`/api/analytics/summary?store_id=${store.id}&days=${dateRange.days}`);
+
+        if (!res.ok) {
+          console.warn('Analytics API returned:', res.status);
+          // Set empty analytics on error
+          setAnalytics({
+            summary: {
+              totalOrders: 0,
+              totalRevenue: 0,
+              totalCogs: 0,
+              totalGrossProfit: 0,
+              totalNetProfit: 0,
+              totalFees: 0,
+              avgProfitMargin: 0,
+              avgOrderValue: 0,
+              avgProfitPerOrder: 0,
+              totalAdSpend: 0,
+              roas: 0,
+              profitAfterAds: 0,
+            },
+            chartData: [],
+            topProducts: [],
+            recentOrders: [],
+          });
+          return;
+        }
+
         const data = await res.json();
         setAnalytics(data);
       } catch (err) {
         console.error('Error loading analytics:', err);
+        // Set empty analytics on error
+        setAnalytics({
+          summary: {
+            totalOrders: 0,
+            totalRevenue: 0,
+            totalCogs: 0,
+            totalGrossProfit: 0,
+            totalNetProfit: 0,
+            totalFees: 0,
+            avgProfitMargin: 0,
+            avgOrderValue: 0,
+            avgProfitPerOrder: 0,
+            totalAdSpend: 0,
+            roas: 0,
+            profitAfterAds: 0,
+          },
+          chartData: [],
+          topProducts: [],
+          recentOrders: [],
+        });
       } finally {
         setLoading(false);
       }
     }
 
     loadAnalytics();
-  }, [store.id, dateRange]);
+  }, [store.id, dateRange.days]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -83,188 +150,210 @@ export default function Dashboard({ store }: { store: Store }) {
     return `${value.toFixed(1)}%`;
   };
 
+  // Navigation handler
+  const navigateTo = (page: string) => {
+    setActivePage(page);
+    setSidebarOpen(false);
+    // For now, just update state. In production, use Next.js router with ?shop param
+  };
+
+  // Loading skeleton
   if (loading || !analytics) {
     return (
-      <div className="min-h-screen p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <div className="skeleton h-8 w-48 mb-2"></div>
-            <div className="skeleton h-4 w-64"></div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="stat-card">
-                <div className="skeleton h-6 w-24 mb-2"></div>
-                <div className="skeleton h-8 w-32"></div>
-              </div>
-            ))}
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-solid border-emerald-500 border-r-transparent mb-4"></div>
+          <div className="text-white text-xl">Loading your profit data...</div>
         </div>
       </div>
     );
   }
 
-  const { summary, chartData, topProducts } = analytics;
+  const { summary, chartData, topProducts, recentOrders } = analytics;
 
   return (
-    <div className="min-h-screen p-6 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Profit Dashboard</h1>
-            <p className="text-gray-500">{store.store_name || store.shop_domain}</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900">
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed top-0 left-0 z-50 h-screen w-64 bg-slate-900/90 backdrop-blur border-r border-white/10 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <div className="p-6 border-b border-white/10">
+            <Link href="/" className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">
+                ProfitPulse
+              </span>
+            </Link>
           </div>
-          <div className="flex gap-2">
-            {[7, 30, 90].map((days) => (
+
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-2">
+            <button
+              onClick={() => navigateTo('dashboard')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
+                activePage === 'dashboard'
+                  ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              <span className="font-medium">Dashboard</span>
+            </button>
+
+            <button
+              onClick={() => navigateTo('products')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
+                activePage === 'products'
+                  ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              <span className="font-medium">Products</span>
+            </button>
+
+            <button
+              onClick={() => navigateTo('orders')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
+                activePage === 'orders'
+                  ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              <span className="font-medium">Orders</span>
+            </button>
+
+            <button
+              onClick={() => navigateTo('settings')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
+                activePage === 'settings'
+                  ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="font-medium">Settings</span>
+            </button>
+          </nav>
+
+          {/* Store Info */}
+          <div className="p-4 border-t border-white/10">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-white font-medium truncate">{store.store_name || 'My Store'}</div>
+              <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                store.subscription_status === 'active'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+              }`}>
+                {store.subscription_status === 'active' ? 'Pro' : 'Trial'}
+              </span>
+            </div>
+            <div className="text-white/40 text-sm truncate">{store.shop_domain}</div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="lg:ml-64 min-h-screen">
+        {/* Top Header */}
+        <header className="bg-slate-900/50 backdrop-blur border-b border-white/10 sticky top-0 z-30">
+          <div className="px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
               <button
-                key={days}
-                onClick={() => setDateRange(days)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  dateRange === days
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                }`}
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden text-white hover:text-emerald-400 transition"
               >
-                {days}D
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
               </button>
-            ))}
-          </div>
-        </div>
+              <h1 className="text-2xl font-bold text-white">Profit Dashboard</h1>
+            </div>
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="stat-card">
-            <p className="stat-label">Total Revenue</p>
-            <p className="stat-value">{formatCurrency(summary.totalRevenue)}</p>
-            <p className="text-sm text-gray-500 mt-1">{summary.totalOrders} orders</p>
-          </div>
-          <div className="stat-card">
-            <p className="stat-label">Total COGS</p>
-            <p className="stat-value text-red-600">{formatCurrency(summary.totalCogs)}</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {summary.totalRevenue > 0 ? formatPercent((summary.totalCogs / summary.totalRevenue) * 100) : '0%'} of revenue
-            </p>
-          </div>
-          <div className="stat-card">
-            <p className="stat-label">Net Profit</p>
-            <p className={`stat-value ${summary.totalNetProfit >= 0 ? 'profit-positive' : 'profit-negative'}`}>
-              {formatCurrency(summary.totalNetProfit)}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {formatPercent(summary.avgProfitMargin)} margin
-            </p>
-          </div>
-          <div className="stat-card">
-            <p className="stat-label">Profit After Ads</p>
-            <p className={`stat-value ${summary.profitAfterAds >= 0 ? 'profit-positive' : 'profit-negative'}`}>
-              {formatCurrency(summary.profitAfterAds)}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {summary.totalAdSpend > 0 ? `${summary.roas.toFixed(2)}x ROAS` : 'No ad spend'}
-            </p>
-          </div>
-        </div>
+            <div className="flex items-center gap-3">
+              {/* Date Range Picker */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowDatePicker(!showDatePicker)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-sm font-medium transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {dateRange.label}
+                  <svg className={`w-4 h-4 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
 
-        {/* Secondary Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="stat-card">
-            <p className="stat-label">Avg Order Value</p>
-            <p className="text-xl font-semibold">{formatCurrency(summary.avgOrderValue)}</p>
-          </div>
-          <div className="stat-card">
-            <p className="stat-label">Avg Profit/Order</p>
-            <p className={`text-xl font-semibold ${summary.avgProfitPerOrder >= 0 ? 'profit-positive' : 'profit-negative'}`}>
-              {formatCurrency(summary.avgProfitPerOrder)}
-            </p>
-          </div>
-          <div className="stat-card">
-            <p className="stat-label">Total Fees</p>
-            <p className="text-xl font-semibold text-orange-600">{formatCurrency(summary.totalFees)}</p>
-          </div>
-          <div className="stat-card">
-            <p className="stat-label">Ad Spend</p>
-            <p className="text-xl font-semibold">{formatCurrency(summary.totalAdSpend)}</p>
-          </div>
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Revenue vs Profit Chart */}
-          <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Revenue vs Profit</h2>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => {
-                      const date = new Date(value);
-                      return `${date.getMonth() + 1}/${date.getDate()}`;
-                    }}
-                  />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                  <Tooltip
-                    formatter={(value) => formatCurrency(value as number)}
-                    labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Revenue"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="profit"
-                    stroke="#22c55e"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Net Profit"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+                {showDatePicker && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />
+                    <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-white/20 rounded-xl shadow-xl z-50 overflow-hidden">
+                      <div className="p-2">
+                        {(['7d', '14d', '30d', '90d'] as DateRangeOption[]).map((option) => (
+                          <button
+                            key={option}
+                            onClick={() => {
+                              setDateRangeOption(option);
+                              setShowDatePicker(false);
+                            }}
+                            className={`w-full text-left px-4 py-2 rounded-lg text-sm transition ${
+                              dateRangeOption === option
+                                ? 'bg-emerald-600 text-white'
+                                : 'text-white/80 hover:bg-white/10'
+                            }`}
+                          >
+                            Last {option.replace('d', '')} days
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
+        </header>
 
-          {/* Top Products */}
-          <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Top Products by Profit</h2>
-            <div className="space-y-3">
-              {topProducts.slice(0, 5).map((product, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{product.title}</p>
-                    <p className="text-xs text-gray-500">{product.quantity} sold</p>
-                  </div>
-                  <div className="text-right ml-4">
-                    <p className={`text-sm font-semibold ${product.profit >= 0 ? 'profit-positive' : 'profit-negative'}`}>
-                      {formatCurrency(product.profit)}
-                    </p>
-                    <p className="text-xs text-gray-500">{formatCurrency(product.revenue)} rev</p>
-                  </div>
-                </div>
-              ))}
-              {topProducts.length === 0 && (
-                <p className="text-gray-500 text-center py-4">No product data yet</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Subscription Status Banner */}
+        {/* Trial Banner */}
         {store.subscription_status === 'trial' && store.trial_ends_at && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-8">
+          <div className="mx-6 mt-6 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-2 border-amber-500/50 rounded-xl p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-amber-800">Free Trial Active</p>
-                <p className="text-sm text-amber-600">
-                  Trial ends {new Date(store.trial_ends_at).toLocaleDateString()}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-500/30 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-white">Free Trial Active</p>
+                  <p className="text-amber-200/80 text-sm">
+                    Ends {new Date(store.trial_ends_at).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => {
@@ -276,14 +365,244 @@ export default function Dashboard({ store }: { store: Store }) {
                       }
                     });
                 }}
-                className="btn-primary"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition"
               >
-                Upgrade Now
+                Upgrade to Pro - $29.99/mo
               </button>
             </div>
           </div>
         )}
-      </div>
+
+        {/* Dashboard Content */}
+        <div className="p-6">
+          {/* Key Metrics - The money stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-white/60 text-sm font-medium">Revenue</h3>
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="text-3xl font-bold text-white mb-1">{formatCurrency(summary.totalRevenue)}</div>
+              <div className="text-white/40 text-sm">{summary.totalOrders} orders</div>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-white/60 text-sm font-medium">Total Costs</h3>
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                </svg>
+              </div>
+              <div className="text-3xl font-bold text-red-400 mb-1">{formatCurrency(summary.totalCogs + summary.totalFees)}</div>
+              <div className="text-white/40 text-sm">
+                {formatCurrency(summary.totalCogs)} COGS + {formatCurrency(summary.totalFees)} fees
+              </div>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-white/60 text-sm font-medium">Net Profit</h3>
+                <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <div className={`text-3xl font-bold mb-1 ${summary.totalNetProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {formatCurrency(summary.totalNetProfit)}
+              </div>
+              <div className="text-white/40 text-sm">
+                {formatPercent(summary.avgProfitMargin)} margin
+              </div>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-white/60 text-sm font-medium">Avg Profit/Order</h3>
+                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className={`text-3xl font-bold mb-1 ${summary.avgProfitPerOrder >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {formatCurrency(summary.avgProfitPerOrder)}
+              </div>
+              <div className="text-white/40 text-sm">
+                AOV: {formatCurrency(summary.avgOrderValue)}
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Revenue vs Profit Chart */}
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-white">Revenue vs Profit</h2>
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-white/60">Revenue</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                    <span className="text-white/60">Profit</span>
+                  </div>
+                </div>
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.5)' }}
+                      tickFormatter={(value) => {
+                        const date = new Date(value);
+                        return `${date.getMonth() + 1}/${date.getDate()}`;
+                      }}
+                    />
+                    <YAxis tick={{ fontSize: 12, fill: 'rgba(255,255,255,0.5)' }} tickFormatter={(v) => `$${v}`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                      labelStyle={{ color: 'white' }}
+                      formatter={(value) => formatCurrency(value as number)}
+                      labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={false}
+                      name="Revenue"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="profit"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={false}
+                      name="Profit"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Top Products by Profit */}
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-white">Top Products by Profit</h2>
+                <button
+                  onClick={() => navigateTo('products')}
+                  className="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"
+                >
+                  View All →
+                </button>
+              </div>
+              <div className="space-y-3">
+                {(topProducts || []).slice(0, 5).map((product, i) => {
+                  const margin = product.margin || (product.revenue > 0 ? (product.profit / product.revenue) * 100 : 0);
+                  const marginColor = margin >= 30 ? 'text-emerald-400' : margin >= 15 ? 'text-amber-400' : 'text-red-400';
+                  return (
+                    <div key={i} className="flex items-center justify-between py-3 border-b border-white/10 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium truncate">{product.title}</p>
+                        <p className="text-white/40 text-sm">{product.quantity} sold • {formatCurrency(product.revenue)} rev</p>
+                      </div>
+                      <div className="text-right ml-4">
+                        <p className={`font-bold ${product.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {formatCurrency(product.profit)}
+                        </p>
+                        <p className={`text-sm ${marginColor}`}>
+                          {formatPercent(margin)} margin
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {(!topProducts || topProducts.length === 0) && (
+                  <div className="text-center py-8">
+                    <p className="text-white/40">No product data yet</p>
+                    <p className="text-white/30 text-sm mt-1">Set your COGS to see product profitability</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Cost Breakdown */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6 mb-8">
+            <h2 className="text-lg font-bold text-white mb-6">Where Your Money Goes</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                <div className="text-white/60 text-sm mb-1">COGS</div>
+                <div className="text-xl font-bold text-white">{formatCurrency(summary.totalCogs)}</div>
+                <div className="text-white/40 text-sm">
+                  {summary.totalRevenue > 0 ? formatPercent((summary.totalCogs / summary.totalRevenue) * 100) : '0%'} of revenue
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                <div className="text-white/60 text-sm mb-1">Payment Fees</div>
+                <div className="text-xl font-bold text-white">{formatCurrency(summary.totalFees * 0.6)}</div>
+                <div className="text-white/40 text-sm">~2.9% + $0.30</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                <div className="text-white/60 text-sm mb-1">Shopify Fees</div>
+                <div className="text-xl font-bold text-white">{formatCurrency(summary.totalFees * 0.4)}</div>
+                <div className="text-white/40 text-sm">Transaction fees</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                <div className="text-white/60 text-sm mb-1">You Keep</div>
+                <div className={`text-xl font-bold ${summary.totalNetProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatCurrency(summary.totalNetProfit)}
+                </div>
+                <div className="text-white/40 text-sm">{formatPercent(summary.avgProfitMargin)} margin</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Orders */}
+          {recentOrders && recentOrders.length > 0 && (
+            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-white">Recent Orders</h2>
+                <button
+                  onClick={() => navigateTo('orders')}
+                  className="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"
+                >
+                  View All →
+                </button>
+              </div>
+              <div className="space-y-3">
+                {recentOrders.slice(0, 5).map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-emerald-600/20 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-white font-medium">#{order.order_number}</div>
+                        <div className="text-white/40 text-sm">
+                          {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-white font-bold">{formatCurrency(order.total_price)}</div>
+                      <div className={`text-sm ${order.net_profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatCurrency(order.net_profit)} profit ({formatPercent(order.profit_margin)})
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

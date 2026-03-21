@@ -39,6 +39,32 @@ export async function POST(request: NextRequest) {
 
     if (existingStore) {
       console.log('✅ Store already exists:', existingStore.id);
+
+      // If store was cancelled/uninstalled, reactivate trial
+      if (existingStore.subscription_status === 'cancelled' || existingStore.access_token === 'revoked') {
+        console.log('🔄 Reactivating store trial');
+        const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        await supabase
+          .from('stores')
+          .update({
+            subscription_status: 'trial',
+            trial_ends_at: trialEndsAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingStore.id);
+
+        return NextResponse.json({
+          store: {
+            id: existingStore.id,
+            store_name: existingStore.store_name || shop.replace('.myshopify.com', ''),
+            shop_domain: shop,
+            email: existingStore.email || '',
+            subscription_status: 'trial',
+            trial_ends_at: trialEndsAt,
+          }
+        });
+      }
+
       return NextResponse.json({
         store: {
           id: existingStore.id,
