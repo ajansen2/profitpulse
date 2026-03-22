@@ -14,11 +14,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
   }
 
-  // Note: Subscription check temporarily disabled for debugging
-  // const subscriptionCheck = await requireActiveSubscription(storeId);
-  // if ('error' in subscriptionCheck) {
-  //   return subscriptionCheck.error;
-  // }
+  // Check subscription status
+  const subscriptionCheck = await requireActiveSubscription(storeId);
+  if ('error' in subscriptionCheck) {
+    return subscriptionCheck.error;
+  }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -258,49 +258,10 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Order sync complete:', synced, 'orders');
 
-    // Check how many line items are in the database after sync
-    const { data: lineItemsAfter, count: lineItemCount } = await supabase
-      .from('order_line_items')
-      .select('id, title, order_id', { count: 'exact' })
-      .eq('store_id', store_id)
-      .limit(5);
-
-    // Count line items we tried to process
-    let totalLineItemsProcessed = 0;
-    let allLineItemErrors: any[] = [];
-    for (const order of allOrders) {
-      totalLineItemsProcessed += (order.line_items || []).length;
-    }
-
-    // Try one test insert to capture error
-    const testLineItem = {
-      store_id: store_id,
-      order_id: '00000000-0000-0000-0000-000000000000', // test UUID
-      shopify_line_item_id: 'test_' + Date.now(),
-      title: 'Test Item',
-      quantity: 1,
-      price: 10,
-    };
-    const { error: testError } = await supabase
-      .from('order_line_items')
-      .insert(testLineItem);
-
-    // Delete test item
-    if (!testError) {
-      await supabase
-        .from('order_line_items')
-        .delete()
-        .eq('shopify_line_item_id', testLineItem.shopify_line_item_id);
-    }
-
     return NextResponse.json({
       success: true,
       synced,
       total_orders: allOrders.length,
-      total_line_items_from_shopify: totalLineItemsProcessed,
-      line_items_in_db: lineItemCount || 0,
-      sample_line_items: lineItemsAfter || [],
-      test_insert_error: testError,
     });
   } catch (error) {
     console.error('❌ Order sync error:', error);
