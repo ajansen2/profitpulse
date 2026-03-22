@@ -13,6 +13,10 @@ api_version = "2024-10"
   topics = ["app/uninstalled"]
   uri = "https://profitpulse-woad.vercel.app/api/webhooks/shopify/uninstall"
 
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "https://profitpulse-woad.vercel.app/api/webhooks/gdpr"
+
 [access_scopes]
 scopes = "read_orders,read_products"
 use_legacy_install_flow = false
