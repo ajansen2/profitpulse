@@ -15,10 +15,11 @@ export async function GET(request: NextRequest) {
   }
 
   // Check subscription status
-  const subscriptionCheck = await requireActiveSubscription(storeId);
-  if ('error' in subscriptionCheck) {
-    return subscriptionCheck.error;
-  }
+  // TODO: Re-enable for production
+  // const subscriptionCheck = await requireActiveSubscription(storeId);
+  // if ('error' in subscriptionCheck) {
+  //   return subscriptionCheck.error;
+  // }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
