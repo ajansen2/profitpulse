@@ -163,9 +163,10 @@ export async function GET(request: NextRequest) {
         onConflict: 'store_id',
       });
 
-    // Register webhooks (only app/uninstalled - orders require protected customer data access)
+    // Register webhooks
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
     try {
+      // Register app/uninstalled webhook
       await fetch(`https://${shop}/admin/api/2024-01/webhooks.json`, {
         method: 'POST',
         headers: {
@@ -180,6 +181,22 @@ export async function GET(request: NextRequest) {
         }),
       });
       console.log('✅ Registered app/uninstalled webhook');
+
+      // Register subscription webhook for billing status changes
+      const subscriptionResult = await fetch(`https://${shop}/admin/api/2024-01/webhooks.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': access_token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          webhook: {
+            topic: 'app_subscriptions/update',
+            address: `${appUrl}/api/webhooks/shopify/subscription`
+          }
+        }),
+      });
+      console.log('💰 Subscription webhook:', subscriptionResult.ok ? '✅' : '❌');
     } catch (e) {
       console.log('⚠️ Webhook registration failed');
     }
@@ -190,7 +207,7 @@ export async function GET(request: NextRequest) {
     const isTestStore = shop.includes('-test') || shop.includes('development');
     const shopName = shop.replace('.myshopify.com', '');
     const clientId = process.env.SHOPIFY_API_KEY;
-    const returnUrl = `https://admin.shopify.com/store/${shopName}/apps/${clientId}`;
+    const returnUrl = `${appUrl}/api/billing/callback?shop=${shop}&store_id=${store.id}`;
 
     const chargeResponse = await fetch(`https://${shop}/admin/api/2024-01/recurring_application_charges.json`, {
       method: 'POST',
