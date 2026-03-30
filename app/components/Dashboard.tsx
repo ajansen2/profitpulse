@@ -98,7 +98,7 @@ export default function Dashboard({ store }: { store: Store }) {
     return Math.max(0, daysLeft);
   };
 
-  // Load settings including currency
+  // Load settings including currency (reload when coming back to dashboard)
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -111,10 +111,10 @@ export default function Dashboard({ store }: { store: Store }) {
         console.error('Error loading settings for dashboard:', err);
       }
     }
-    if (store?.id) {
+    if (store?.id && activePage === 'dashboard') {
       loadSettings();
     }
-  }, [store?.id]);
+  }, [store?.id, activePage]);
 
   // Check if first time user for onboarding
   useEffect(() => {

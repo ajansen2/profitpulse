@@ -56,7 +56,24 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'profitable' | 'unprofitable'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [currency, setCurrency] = useState('USD');
   const itemsPerPage = 10;
+
+  // Load currency setting
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await fetch(`/api/settings?store_id=${store.id}`);
+        const data = await res.json();
+        if (data.settings?.currency) {
+          setCurrency(data.settings.currency);
+        }
+      } catch (err) {
+        console.error('Error loading settings:', err);
+      }
+    }
+    loadSettings();
+  }, [store.id]);
 
   const dateRange = useMemo(() => {
     const days = dateRangeOption === '7d' ? 7 : dateRangeOption === '14d' ? 14 : dateRangeOption === '30d' ? 30 : dateRangeOption === '90d' ? 90 : null;
@@ -158,7 +175,7 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
       minimumFractionDigits: 2,
     }).format(value || 0);
   };
