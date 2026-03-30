@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
 
-    const isTestStore = shop.includes('-test') || shop.includes('development');
+    const isTestStore = shop.includes('-test') || shop.includes('development') || shop.includes('dev-');
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://profitpulse.app';
 
     // Check for existing charges
     const existingResponse = await fetch(
@@ -86,10 +87,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create new charge
-    const shopName = shop.replace('.myshopify.com', '');
-    const clientId = process.env.SHOPIFY_CLIENT_ID;
-    const returnUrl = `https://admin.shopify.com/store/${shopName}/apps/${clientId}`;
+    // Create new charge - return URL goes to billing callback to properly update subscription status
+    const returnUrl = `${appUrl}/api/billing/callback?shop=${shop}&store_id=${storeId}`;
 
     console.log('💰 [BILLING CREATE] Creating new charge...');
 
@@ -103,8 +102,8 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           recurring_application_charge: {
-            name: 'ProfitPulse - Pro Plan',
-            price: 99.00,
+            name: 'ProfitPulse Pro',
+            price: 29.99,
             trial_days: 7,
             return_url: returnUrl,
             // Only include test flag for dev/test stores

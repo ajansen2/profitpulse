@@ -102,6 +102,11 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   // Break-Even Calculator State
   const [breakEvenProduct, setBreakEvenProduct] = useState({ price: 0, cost: 0, fixedCosts: 0 });
 
+  // Cancellation state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+
   useEffect(() => {
     loadSettings();
     loadExpenses();
@@ -257,33 +262,15 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       const data = await res.json();
       if (data.fees) {
         setHiddenFees(data.fees);
+        if (data.fees.length === 0) {
+          alert('Great news! No hidden fees detected. Your profit tracking looks accurate.');
+        }
+      } else if (data.message) {
+        alert(data.message);
       }
     } catch (err) {
       console.error('Error scanning fees:', err);
-      // Demo data for now
-      setHiddenFees([
-        {
-          type: 'payment_processor',
-          description: 'Higher payment processing rate detected',
-          amount: 156.32,
-          potential_savings: 45.50,
-          recommendation: 'Switch to Shopify Payments to save ~$45/month'
-        },
-        {
-          type: 'plan_upgrade',
-          description: 'Transaction fee savings available',
-          amount: 89.20,
-          potential_savings: 44.60,
-          recommendation: 'Upgrade to Shopify plan to reduce transaction fees from 2% to 1%'
-        },
-        {
-          type: 'chargebacks',
-          description: '3 chargebacks this month',
-          amount: 75.00,
-          potential_savings: 75.00,
-          recommendation: 'Review orders with high-risk indicators before shipping'
-        }
-      ]);
+      alert('Failed to scan for hidden fees. Please sync your orders first.');
     } finally {
       setScanningFees(false);
     }
@@ -332,6 +319,35 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       currency: 'USD',
       minimumFractionDigits: 2,
     }).format(value);
+  };
+
+  const cancelSubscription = async () => {
+    setCancelling(true);
+    try {
+      const res = await fetch('/api/billing/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: store.id,
+          shop: store.shop_domain,
+          reason: cancelReason,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowCancelModal(false);
+        alert('Subscription cancelled. You can continue using ProfitPulse until the end of your billing period.');
+        // Refresh the page to update subscription status
+        window.location.reload();
+      } else {
+        alert('Failed to cancel: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Error cancelling:', err);
+      alert('Failed to cancel subscription. Please try again.');
+    } finally {
+      setCancelling(false);
+    }
   };
 
   if (loading) {
@@ -420,6 +436,42 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       {/* General Settings */}
       {activeTab === 'general' && (
         <div className="space-y-6">
+          {/* Subscription Section */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Subscription</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    store.subscription_status === 'active'
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : store.subscription_status === 'trial'
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {store.subscription_status === 'active' ? 'Active' :
+                     store.subscription_status === 'trial' ? 'Free Trial' :
+                     store.subscription_status?.charAt(0).toUpperCase() + store.subscription_status?.slice(1) || 'Unknown'}
+                  </span>
+                  <span className="text-white font-medium">ProfitPulse Pro</span>
+                </div>
+                <p className="text-white/60 text-sm mt-1">
+                  {store.subscription_status === 'trial' && store.trial_ends_at
+                    ? `Trial ends ${new Date(store.trial_ends_at).toLocaleDateString()}`
+                    : '$29.99/month • Cancel anytime'}
+                </p>
+              </div>
+              {store.subscription_status !== 'cancelled' && (
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition"
+                >
+                  Cancel Subscription
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Data Sync Section */}
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
             <h3 className="text-lg font-bold text-white mb-4">Data Sync</h3>
@@ -1240,6 +1292,79 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Support Footer */}
+      <div className="mt-8 pt-6 border-t border-white/10">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-center sm:text-left">
+            <p className="text-white/60 text-sm">
+              Need help? Contact us at{' '}
+              <a href="mailto:adam@argora.ai" className="text-emerald-400 hover:text-emerald-300 underline">
+                adam@argora.ai
+              </a>
+            </p>
+            <p className="text-white/40 text-xs mt-1">We typically respond within 24 hours</p>
+          </div>
+          <a
+            href="/faq"
+            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white rounded-lg text-sm font-medium transition flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            View FAQ
+          </a>
+        </div>
+      </div>
+
+      {/* Cancel Subscription Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-white/10 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-white mb-2">Cancel Subscription?</h3>
+            <p className="text-white/60 text-sm mb-4">
+              We're sorry to see you go. Your subscription will remain active until the end of your current billing period.
+            </p>
+
+            <div className="mb-4">
+              <label className="text-white/60 text-sm block mb-2">Help us improve - why are you cancelling?</label>
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">Select a reason (optional)</option>
+                <option value="too_expensive">Too expensive</option>
+                <option value="not_using">Not using it enough</option>
+                <option value="missing_features">Missing features I need</option>
+                <option value="switching">Switching to another app</option>
+                <option value="closing_store">Closing my store</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition"
+              >
+                Keep Subscription
+              </button>
+              <button
+                onClick={cancelSubscription}
+                disabled={cancelling}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 text-white rounded-lg font-medium transition"
+              >
+                {cancelling ? 'Cancelling...' : 'Yes, Cancel'}
+              </button>
+            </div>
+
+            <p className="text-white/40 text-xs mt-4 text-center">
+              Questions? Email us at adam@argora.ai
+            </p>
           </div>
         </div>
       )}
