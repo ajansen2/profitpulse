@@ -191,12 +191,12 @@ export default function FAQPage() {
 
         {/* Back to Dashboard */}
         <div className="mt-8 text-center">
-          <a
-            href="/"
+          <button
+            onClick={() => window.history.back()}
             className="text-white/60 hover:text-white text-sm underline transition"
           >
-            ← Back to Dashboard
-          </a>
+            ← Back to Settings
+          </button>
         </div>
       </div>
     </div>

@@ -134,10 +134,9 @@ async function checkExistingCharge(store: any): Promise<'active' | 'pending' | '
 
 async function createBillingCharge(store: any): Promise<boolean> {
   try {
-    const clientId = process.env.SHOPIFY_CLIENT_ID;
-    const isTestStore = store.shop_domain.includes('-test') || store.shop_domain.includes('development');
-    const shopName = store.shop_domain.replace('.myshopify.com', '');
-    const returnUrl = `https://admin.shopify.com/store/${shopName}/apps/${clientId}`;
+    const isTestStore = store.shop_domain.includes('-test') || store.shop_domain.includes('development') || store.shop_domain.includes('dev-');
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://profitpulse.app';
+    const returnUrl = `${appUrl}/api/billing/callback?shop=${store.shop_domain}&store_id=${store.id}`;
 
     const response = await fetch(
       `https://${store.shop_domain}/admin/api/2024-01/recurring_application_charges.json`,

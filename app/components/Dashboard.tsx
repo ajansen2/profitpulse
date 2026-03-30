@@ -85,6 +85,35 @@ export default function Dashboard({ store }: { store: Store }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('dashboard');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(1);
+
+  // Calculate trial days left
+  const getTrialDaysLeft = () => {
+    if (!store?.trial_ends_at) return null;
+    const trialEnd = new Date(store.trial_ends_at);
+    const now = new Date();
+    const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, daysLeft);
+  };
+
+  // Check if first time user for onboarding
+  useEffect(() => {
+    if (store && !loading) {
+      const hasSeenOnboarding = localStorage.getItem(`profitpulse_onboarding_${store.id}`);
+      if (!hasSeenOnboarding) {
+        setShowOnboarding(true);
+      }
+    }
+  }, [store, loading]);
+
+  const completeOnboarding = () => {
+    if (store) {
+      localStorage.setItem(`profitpulse_onboarding_${store.id}`, 'true');
+    }
+    setShowOnboarding(false);
+    setOnboardingStep(1);
+  };
 
   const dateRange = useMemo(() => {
     const days = dateRangeOption === '7d' ? 7 : dateRangeOption === '14d' ? 14 : dateRangeOption === '30d' ? 30 : 90;
@@ -197,7 +226,7 @@ export default function Dashboard({ store }: { store: Store }) {
   // Loading skeleton
   if (loading || !analytics) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-solid border-emerald-500 border-r-transparent mb-4"></div>
           <div className="text-white text-xl">Loading your profit data...</div>
@@ -256,7 +285,102 @@ export default function Dashboard({ store }: { store: Store }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900">
+    <div className="min-h-screen bg-zinc-950">
+      {/* Onboarding Modal */}
+      {showOnboarding && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+            <div className="flex justify-center gap-2 mb-6">
+              {[1, 2, 3].map((step) => (
+                <div
+                  key={step}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    step === onboardingStep ? 'bg-emerald-500 w-6' : step < onboardingStep ? 'bg-emerald-500' : 'bg-zinc-700'
+                  }`}
+                />
+              ))}
+            </div>
+
+            {onboardingStep === 1 && (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Welcome to ProfitPulse!</h2>
+                <p className="text-zinc-400 mb-6">
+                  See your true profit after all costs - COGS, fees, shipping, and more.
+                </p>
+              </div>
+            )}
+
+            {onboardingStep === 2 && (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Set Your Product Costs</h2>
+                <p className="text-zinc-400 mb-6">
+                  Go to Products and enter your cost of goods (COGS) for each item to calculate accurate profit margins.
+                </p>
+              </div>
+            )}
+
+            {onboardingStep === 3 && (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">AI Profit Coach</h2>
+                <p className="text-zinc-400 mb-6">
+                  Get personalized recommendations to increase your profit margins based on your data.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              {onboardingStep > 1 && (
+                <button
+                  onClick={() => setOnboardingStep(onboardingStep - 1)}
+                  className="flex-1 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium transition"
+                >
+                  Back
+                </button>
+              )}
+              {onboardingStep < 3 ? (
+                <button
+                  onClick={() => setOnboardingStep(onboardingStep + 1)}
+                  className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  onClick={completeOnboarding}
+                  className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition"
+                >
+                  Get Started
+                </button>
+              )}
+            </div>
+
+            {onboardingStep < 3 && (
+              <button
+                onClick={completeOnboarding}
+                className="w-full mt-3 text-zinc-500 hover:text-zinc-400 text-sm transition"
+              >
+                Skip tutorial
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -266,10 +390,10 @@ export default function Dashboard({ store }: { store: Store }) {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed top-0 left-0 z-50 h-screen w-64 bg-slate-900/90 backdrop-blur border-r border-white/10 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed top-0 left-0 z-50 h-screen w-64 bg-zinc-900 border-r border-zinc-800 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b border-white/10">
+          <div className="p-6 border-b border-zinc-800">
             <Link href="/" className="flex items-center gap-3">
               <Image
                 src="/logo.png"
@@ -291,7 +415,7 @@ export default function Dashboard({ store }: { store: Store }) {
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
                 activePage === 'dashboard'
                   ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
-                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  : 'text-white/60 hover:bg-zinc-900/50 hover:text-white'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,7 +429,7 @@ export default function Dashboard({ store }: { store: Store }) {
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
                 activePage === 'products'
                   ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
-                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  : 'text-white/60 hover:bg-zinc-900/50 hover:text-white'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -319,7 +443,7 @@ export default function Dashboard({ store }: { store: Store }) {
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
                 activePage === 'orders'
                   ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
-                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  : 'text-white/60 hover:bg-zinc-900/50 hover:text-white'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -333,7 +457,7 @@ export default function Dashboard({ store }: { store: Store }) {
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
                 activePage === 'settings'
                   ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'
-                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  : 'text-white/60 hover:bg-zinc-900/50 hover:text-white'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -345,7 +469,7 @@ export default function Dashboard({ store }: { store: Store }) {
           </nav>
 
           {/* Store Info */}
-          <div className="p-4 border-t border-white/10">
+          <div className="p-4 border-t border-zinc-800">
             <div className="flex items-center justify-between mb-1">
               <div className="text-white font-medium truncate">{store.store_name || 'My Store'}</div>
               <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
@@ -364,7 +488,7 @@ export default function Dashboard({ store }: { store: Store }) {
       {/* Main Content */}
       <main className="lg:ml-64 min-h-screen">
         {/* Top Header */}
-        <header className="bg-slate-900/50 backdrop-blur border-b border-white/10 sticky top-0 z-30">
+        <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-30">
           <div className="px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
@@ -379,11 +503,47 @@ export default function Dashboard({ store }: { store: Store }) {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Help Button */}
+              <button
+                onClick={() => setShowOnboarding(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-zinc-300 text-sm font-medium transition"
+                title="Quick Start Guide"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Help
+              </button>
+
+              {/* Trial Badge */}
+              {(() => {
+                const trialDays = getTrialDaysLeft();
+                if (store?.subscription_status === 'active') {
+                  return (
+                    <span className="px-3 py-1 bg-green-600/20 border border-green-500/30 rounded-full text-green-300 text-sm font-medium">
+                      Pro Plan
+                    </span>
+                  );
+                }
+                if (trialDays !== null) {
+                  return (
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      trialDays <= 3
+                        ? 'bg-red-500/20 border border-red-500/30 text-red-300'
+                        : 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300'
+                    }`}>
+                      {trialDays} day{trialDays !== 1 ? 's' : ''} left
+                    </span>
+                  );
+                }
+                return null;
+              })()}
+
               {/* Date Range Picker */}
               <div className="relative">
                 <button
                   onClick={() => setShowDatePicker(!showDatePicker)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-sm font-medium transition"
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-white text-sm font-medium transition"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -397,7 +557,7 @@ export default function Dashboard({ store }: { store: Store }) {
                 {showDatePicker && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />
-                    <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-white/20 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <div className="absolute right-0 mt-2 w-48 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl z-50 overflow-hidden">
                       <div className="p-2">
                         {(['7d', '14d', '30d', '90d'] as DateRangeOption[]).map((option) => (
                           <button
@@ -409,7 +569,7 @@ export default function Dashboard({ store }: { store: Store }) {
                             className={`w-full text-left px-4 py-2 rounded-lg text-sm transition ${
                               dateRangeOption === option
                                 ? 'bg-emerald-600 text-white'
-                                : 'text-white/80 hover:bg-white/10'
+                                : 'text-white/80 hover:bg-zinc-800'
                             }`}
                           >
                             Last {option.replace('d', '')} days
@@ -468,7 +628,7 @@ export default function Dashboard({ store }: { store: Store }) {
         <div className="p-6">
           {/* Key Metrics - The money stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-white/60 text-sm font-medium">Revenue</h3>
                 <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -482,7 +642,7 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             </div>
 
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-white/60 text-sm font-medium">Total Costs</h3>
                 <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -495,7 +655,7 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             </div>
 
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-white/60 text-sm font-medium">Net Profit</h3>
                 <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -511,7 +671,7 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             </div>
 
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-white/60 text-sm font-medium">Avg Profit/Order</h3>
                 <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -530,7 +690,7 @@ export default function Dashboard({ store }: { store: Store }) {
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Revenue vs Profit Chart */}
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-white">Revenue vs Profit</h2>
                 <div className="flex items-center gap-4 text-sm">
@@ -585,7 +745,7 @@ export default function Dashboard({ store }: { store: Store }) {
             </div>
 
             {/* Top Products by Profit */}
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-white">Top Products by Profit</h2>
                 <div className="flex items-center gap-3">
@@ -611,7 +771,7 @@ export default function Dashboard({ store }: { store: Store }) {
                   const margin = product.margin || (product.revenue > 0 ? (product.profit / product.revenue) * 100 : 0);
                   const marginColor = margin >= 30 ? 'text-emerald-400' : margin >= 15 ? 'text-amber-400' : 'text-red-400';
                   return (
-                    <div key={i} className="flex items-center justify-between py-3 border-b border-white/10 last:border-0">
+                    <div key={i} className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0">
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-medium truncate">{product.title}</p>
                         <p className="text-white/40 text-sm">{product.quantity} sold • {formatCurrency(product.revenue)} rev</p>
@@ -640,7 +800,7 @@ export default function Dashboard({ store }: { store: Store }) {
           {/* Additional Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Daily Orders Bar Chart */}
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <h2 className="text-lg font-bold text-white mb-6">Daily Orders</h2>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -667,7 +827,7 @@ export default function Dashboard({ store }: { store: Store }) {
             </div>
 
             {/* Cost Breakdown Pie Chart */}
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <h2 className="text-lg font-bold text-white mb-6">Revenue Breakdown</h2>
               <div className="h-64 flex items-center justify-center">
                 {summary.totalRevenue > 0 ? (
@@ -743,27 +903,27 @@ export default function Dashboard({ store }: { store: Store }) {
           </div>
 
           {/* Cost Breakdown */}
-          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6 mb-8">
+          <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6 mb-8">
             <h2 className="text-lg font-bold text-white mb-6">Where Your Money Goes</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
                 <div className="text-white/60 text-sm mb-1">COGS</div>
                 <div className="text-xl font-bold text-white">{formatCurrency(summary.totalCogs)}</div>
                 <div className="text-white/40 text-sm">
                   {summary.totalRevenue > 0 ? formatPercent((summary.totalCogs / summary.totalRevenue) * 100) : '0%'} of revenue
                 </div>
               </div>
-              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
                 <div className="text-white/60 text-sm mb-1">Payment Fees</div>
                 <div className="text-xl font-bold text-white">{formatCurrency(summary.totalFees * 0.6)}</div>
                 <div className="text-white/40 text-sm">~2.9% + $0.30</div>
               </div>
-              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
                 <div className="text-white/60 text-sm mb-1">Shopify Fees</div>
                 <div className="text-xl font-bold text-white">{formatCurrency(summary.totalFees * 0.4)}</div>
                 <div className="text-white/40 text-sm">Transaction fees</div>
               </div>
-              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+              <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
                 <div className="text-white/60 text-sm mb-1">You Keep</div>
                 <div className={`text-xl font-bold ${summary.totalNetProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {formatCurrency(summary.totalNetProfit)}
@@ -775,7 +935,7 @@ export default function Dashboard({ store }: { store: Store }) {
 
           {/* Recent Orders */}
           {recentOrders && recentOrders.length > 0 && (
-            <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-white">Recent Orders</h2>
                 <div className="flex items-center gap-3">
@@ -798,7 +958,7 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
               <div className="space-y-3">
                 {recentOrders.slice(0, 5).map((order) => (
-                  <div key={order.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
+                  <div key={order.id} className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-lg">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-emerald-600/20 rounded-lg flex items-center justify-center">
                         <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
