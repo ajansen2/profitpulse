@@ -45,25 +45,8 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [bulkEditCosts, setBulkEditCosts] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
-  const [currency, setCurrency] = useState('USD');
   const itemsPerPage = 10;
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Load currency setting
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        const res = await fetch(`/api/settings?store_id=${store.id}`);
-        const data = await res.json();
-        if (data.settings?.currency) {
-          setCurrency(data.settings.currency);
-        }
-      } catch (err) {
-        console.error('Error loading settings:', err);
-      }
-    }
-    loadSettings();
-  }, [store.id]);
 
   useEffect(() => {
     loadProducts();
@@ -288,7 +271,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: currency,
+      currency: 'USD',
       minimumFractionDigits: 2,
     }).format(value);
   };
