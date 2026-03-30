@@ -253,8 +253,18 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
     try {
       const res = await fetch(`/api/settings?store_id=${store.id}`);
       const data = await res.json();
+      console.log('📖 Loaded settings from API:', data.settings);
+
       if (data.settings) {
-        setSettings({ ...settings, ...data.settings });
+        // Merge loaded settings, but keep defaults for null/undefined values
+        const merged = { ...settings };
+        for (const key of Object.keys(data.settings)) {
+          if (data.settings[key] !== null && data.settings[key] !== undefined) {
+            (merged as any)[key] = data.settings[key];
+          }
+        }
+        console.log('📖 Merged settings:', merged);
+        setSettings(merged);
       }
     } catch (err) {
       console.error('Error loading settings:', err);
@@ -266,15 +276,34 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      await fetch('/api/settings', {
+      const payload = { store_id: store.id, ...settings };
+      console.log('💾 Saving settings:', payload);
+
+      const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store_id: store.id, ...settings })
+        body: JSON.stringify(payload)
       });
+
+      const data = await res.json();
+      console.log('💾 Save response:', data);
+
+      if (!res.ok || data.error) {
+        console.error('Save failed:', data.error || 'Unknown error');
+        alert('Failed to save settings: ' + (data.error || 'Unknown error'));
+        return;
+      }
+
+      // Update local state with saved settings from server
+      if (data.settings) {
+        setSettings({ ...settings, ...data.settings });
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error('Error saving settings:', err);
+      alert('Failed to save settings. Check console for details.');
     } finally {
       setSaving(false);
     }

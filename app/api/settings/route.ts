@@ -65,6 +65,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { store_id, ...updates } = body;
 
+    console.log('📝 [SETTINGS] Saving for store:', store_id);
+    console.log('📝 [SETTINGS] Updates received:', JSON.stringify(updates, null, 2));
+
     if (!store_id) {
       return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
     }
@@ -104,6 +107,8 @@ export async function POST(request: NextRequest) {
 
     sanitizedUpdates.updated_at = new Date().toISOString();
 
+    console.log('📝 [SETTINGS] Sanitized updates:', JSON.stringify(sanitizedUpdates, null, 2));
+
     const { data: settings, error } = await supabase
       .from('store_settings')
       .update(sanitizedUpdates)
@@ -112,13 +117,15 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Settings update error:', error);
-      return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
+      console.error('❌ [SETTINGS] Update error:', error);
+      return NextResponse.json({ error: 'Failed to update settings', details: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ settings });
+    console.log('✅ [SETTINGS] Saved successfully:', JSON.stringify(settings, null, 2));
+
+    return NextResponse.json({ settings, success: true });
   } catch (error) {
-    console.error('Settings POST error:', error);
+    console.error('❌ [SETTINGS] POST error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

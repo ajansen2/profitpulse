@@ -87,6 +87,7 @@ export default function Dashboard({ store }: { store: Store }) {
   const [activePage, setActivePage] = useState('dashboard');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
+  const [currency, setCurrency] = useState('USD');
 
   // Calculate trial days left
   const getTrialDaysLeft = () => {
@@ -96,6 +97,24 @@ export default function Dashboard({ store }: { store: Store }) {
     const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return Math.max(0, daysLeft);
   };
+
+  // Load settings including currency
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await fetch(`/api/settings?store_id=${store.id}`);
+        const data = await res.json();
+        if (data.settings?.currency) {
+          setCurrency(data.settings.currency);
+        }
+      } catch (err) {
+        console.error('Error loading settings for dashboard:', err);
+      }
+    }
+    if (store?.id) {
+      loadSettings();
+    }
+  }, [store?.id]);
 
   // Check if first time user for onboarding
   useEffect(() => {
@@ -206,7 +225,7 @@ export default function Dashboard({ store }: { store: Store }) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
