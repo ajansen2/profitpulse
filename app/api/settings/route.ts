@@ -40,6 +40,10 @@ export async function GET(request: NextRequest) {
         shopify_fee_rate: 0.02,
         include_taxes_in_revenue: false,
         include_shipping_in_revenue: true,
+        currency: 'USD',
+        email_daily_digest: true,
+        email_weekly_summary: true,
+        email_profit_alerts: true,
       })
       .select()
       .single();
@@ -80,6 +84,15 @@ export async function POST(request: NextRequest) {
       'shopify_fee_rate',
       'include_taxes_in_revenue',
       'include_shipping_in_revenue',
+      'currency',
+      'profit_goal_daily',
+      'profit_goal_monthly',
+      'notification_email',
+      'email_daily_digest',
+      'email_weekly_summary',
+      'email_profit_alerts',
+      'email_alert_threshold',
+      'slack_webhook_url',
     ];
 
     const sanitizedUpdates: Record<string, any> = {};

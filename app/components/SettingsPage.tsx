@@ -269,7 +269,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store_id: store.id, settings })
+        body: JSON.stringify({ store_id: store.id, ...settings })
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
