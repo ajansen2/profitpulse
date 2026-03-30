@@ -688,19 +688,19 @@ export default function Dashboard({ store }: { store: Store }) {
           </div>
 
           {/* Period Comparison */}
-          {(comparison.prevTotalRevenue > 0 || comparison.prevTotalNetProfit !== 0 || comparison.prevTotalOrders > 0) && (
-            <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-blue-500/30 rounded-xl p-6 mb-8">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-white">Period Comparison</h2>
-                  <p className="text-white/60 text-sm">{dateRange.label} vs previous {dateRange.days} days</p>
-                </div>
+          <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-blue-500/30 rounded-xl p-6 mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
               </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Period Comparison</h2>
+                <p className="text-white/60 text-sm">{dateRange.label} vs previous {dateRange.days} days</p>
+              </div>
+            </div>
+            {(comparison.prevTotalRevenue > 0 || comparison.prevTotalNetProfit !== 0 || comparison.prevTotalOrders > 0) ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white/5 rounded-lg p-4">
                   <div className="text-white/60 text-sm mb-1">Revenue</div>
@@ -753,8 +753,13 @@ export default function Dashboard({ store }: { store: Store }) {
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="bg-white/5 rounded-lg p-6 text-center">
+                <p className="text-white/60">No previous period data available for comparison</p>
+                <p className="text-white/40 text-sm mt-1">Need {dateRange.days * 2} days of data to compare {dateRange.days}-day periods</p>
+              </div>
+            )}
+          </div>
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
