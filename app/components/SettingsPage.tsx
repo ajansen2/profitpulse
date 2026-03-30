@@ -27,6 +27,9 @@ interface StoreSettings {
   email_alert_threshold: number;
   slack_webhook_url?: string;
   notification_email?: string;
+  currency: string;
+  profit_goal_daily?: number;
+  profit_goal_monthly?: number;
 }
 
 interface HiddenFee {
@@ -57,6 +60,21 @@ const SHOPIFY_PLANS = [
   { value: 'plus', label: 'Shopify Plus', rate: 0 },
 ];
 
+const CURRENCIES = [
+  { value: 'USD', label: 'US Dollar ($)', symbol: '$' },
+  { value: 'EUR', label: 'Euro (€)', symbol: '€' },
+  { value: 'GBP', label: 'British Pound (£)', symbol: '£' },
+  { value: 'CAD', label: 'Canadian Dollar (C$)', symbol: 'C$' },
+  { value: 'AUD', label: 'Australian Dollar (A$)', symbol: 'A$' },
+  { value: 'JPY', label: 'Japanese Yen (¥)', symbol: '¥' },
+  { value: 'CNY', label: 'Chinese Yuan (¥)', symbol: '¥' },
+  { value: 'INR', label: 'Indian Rupee (₹)', symbol: '₹' },
+  { value: 'BRL', label: 'Brazilian Real (R$)', symbol: 'R$' },
+  { value: 'MXN', label: 'Mexican Peso (MX$)', symbol: 'MX$' },
+  { value: 'SGD', label: 'Singapore Dollar (S$)', symbol: 'S$' },
+  { value: 'NZD', label: 'New Zealand Dollar (NZ$)', symbol: 'NZ$' },
+];
+
 export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   const [settings, setSettings] = useState<StoreSettings>({
     default_cogs_percentage: 30,
@@ -71,6 +89,9 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
     email_weekly_summary: true,
     email_profit_alerts: true,
     email_alert_threshold: 0,
+    currency: 'USD',
+    profit_goal_daily: undefined,
+    profit_goal_monthly: undefined,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -107,6 +128,9 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
+
+  // Export state
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -317,9 +341,75 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: settings.currency || 'USD',
       minimumFractionDigits: 2,
     }).format(value);
+  };
+
+  const exportAllData = async () => {
+    setExporting(true);
+    try {
+      // Fetch orders
+      const ordersRes = await fetch(`/api/orders?store_id=${store.id}&limit=10000`);
+      const ordersData = await ordersRes.json();
+
+      // Fetch products
+      const productsRes = await fetch(`/api/products?store_id=${store.id}`);
+      const productsData = await productsRes.json();
+
+      // Create orders CSV
+      if (ordersData.orders && ordersData.orders.length > 0) {
+        const orderHeaders = ['Order ID', 'Date', 'Customer', 'Revenue', 'COGS', 'Payment Fee', 'Shopify Fee', 'Shipping', 'Net Profit', 'Margin %'];
+        const orderRows = ordersData.orders.map((o: any) => [
+          o.shopify_order_id || o.id,
+          new Date(o.created_at).toLocaleDateString(),
+          o.customer_name || 'Guest',
+          o.total_price || 0,
+          o.total_cogs || 0,
+          o.payment_fee || 0,
+          o.shopify_fee || 0,
+          o.shipping_cost || 0,
+          o.net_profit || 0,
+          o.total_price > 0 ? ((o.net_profit || 0) / o.total_price * 100).toFixed(1) : '0',
+        ]);
+        const ordersCsv = [orderHeaders, ...orderRows].map(row => row.join(',')).join('\n');
+        downloadFile(ordersCsv, `profitpulse-orders-${new Date().toISOString().split('T')[0]}.csv`);
+      }
+
+      // Create products CSV
+      if (productsData.products && productsData.products.length > 0) {
+        const productHeaders = ['Product ID', 'Title', 'Variant', 'Price', 'Cost', 'Margin %', 'Units Sold', 'Total Profit'];
+        const productRows = productsData.products.map((p: any) => [
+          p.shopify_product_id || p.id,
+          `"${(p.title || '').replace(/"/g, '""')}"`,
+          `"${(p.variant_title || 'Default').replace(/"/g, '""')}"`,
+          p.price || 0,
+          p.cost || 0,
+          p.price > 0 && p.cost ? (((p.price - p.cost) / p.price) * 100).toFixed(1) : '0',
+          p.units_sold || 0,
+          p.total_profit || 0,
+        ]);
+        const productsCsv = [productHeaders, ...productRows].map(row => row.join(',')).join('\n');
+        downloadFile(productsCsv, `profitpulse-products-${new Date().toISOString().split('T')[0]}.csv`);
+      }
+
+      alert('Export complete! Check your downloads folder.');
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Failed to export data. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const downloadFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const cancelSubscription = async () => {
@@ -473,6 +563,70 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
             </div>
           </div>
 
+          {/* Currency Settings */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Currency</h3>
+            <div>
+              <label className="text-white/60 text-sm block mb-2">Display Currency</label>
+              <select
+                value={settings.currency || 'USD'}
+                onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
+                className="w-full max-w-xs px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+              >
+                {CURRENCIES.map((currency) => (
+                  <option key={currency.value} value={currency.value}>
+                    {currency.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-white/40 text-xs mt-2">All amounts will be displayed in this currency</p>
+            </div>
+          </div>
+
+          {/* Profit Goals */}
+          <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border-2 border-emerald-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Profit Goals</h3>
+                <p className="text-white/60 text-sm">Set targets to track your progress</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-white/60 text-sm block mb-2">Daily Profit Goal</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/60">{CURRENCIES.find(c => c.value === settings.currency)?.symbol || '$'}</span>
+                  <input
+                    type="number"
+                    placeholder="e.g. 500"
+                    value={settings.profit_goal_daily || ''}
+                    onChange={(e) => setSettings({ ...settings, profit_goal_daily: parseFloat(e.target.value) || undefined })}
+                    className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-white/60 text-sm block mb-2">Monthly Profit Goal</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/60">{CURRENCIES.find(c => c.value === settings.currency)?.symbol || '$'}</span>
+                  <input
+                    type="number"
+                    placeholder="e.g. 15000"
+                    value={settings.profit_goal_monthly || ''}
+                    onChange={(e) => setSettings({ ...settings, profit_goal_monthly: parseFloat(e.target.value) || undefined })}
+                    className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-white/40 text-xs mt-3">Goals will be shown on your dashboard with progress tracking</p>
+          </div>
+
           {/* Data Sync Section */}
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
             <h3 className="text-lg font-bold text-white mb-4">Data Sync</h3>
@@ -530,6 +684,32 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
               </button>
             </div>
             <p className="text-white/40 text-xs mt-3">Last sync pulls recent data from Shopify. Orders include line items for product profitability.</p>
+          </div>
+
+          {/* Export Data Section */}
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Export Data</h3>
+            <p className="text-white/60 text-sm mb-4">Download your orders and products as CSV files</p>
+            <button
+              onClick={exportAllData}
+              disabled={exporting}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              {exporting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Export All Data (CSV)
+                </>
+              )}
+            </button>
+            <p className="text-white/40 text-xs mt-3">Downloads both orders and products. You own your data.</p>
           </div>
 
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">

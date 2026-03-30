@@ -687,6 +687,75 @@ export default function Dashboard({ store }: { store: Store }) {
             </div>
           </div>
 
+          {/* Period Comparison */}
+          {(comparison.prevTotalRevenue > 0 || comparison.prevTotalNetProfit !== 0 || comparison.prevTotalOrders > 0) && (
+            <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-blue-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Period Comparison</h2>
+                  <p className="text-white/60 text-sm">{dateRange.label} vs previous {dateRange.days} days</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="text-white/60 text-sm mb-1">Revenue</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-bold text-white">{formatCurrency(summary.totalRevenue)}</span>
+                    <span className={`text-sm font-medium ${comparison.revenueChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {comparison.revenueChange >= 0 ? '+' : ''}{comparison.revenueChange.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="text-white/40 text-xs mt-1">
+                    was {formatCurrency(comparison.prevTotalRevenue)}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="text-white/60 text-sm mb-1">Net Profit</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-xl font-bold ${summary.totalNetProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {formatCurrency(summary.totalNetProfit)}
+                    </span>
+                    <span className={`text-sm font-medium ${comparison.profitChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {comparison.profitChange >= 0 ? '+' : ''}{comparison.profitChange.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="text-white/40 text-xs mt-1">
+                    was {formatCurrency(comparison.prevTotalNetProfit)}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="text-white/60 text-sm mb-1">Orders</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-bold text-white">{summary.totalOrders}</span>
+                    <span className={`text-sm font-medium ${comparison.ordersChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {comparison.ordersChange >= 0 ? '+' : ''}{comparison.ordersChange.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="text-white/40 text-xs mt-1">
+                    was {comparison.prevTotalOrders}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="text-white/60 text-sm mb-1">Avg Order Value</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-bold text-white">{formatCurrency(summary.avgOrderValue)}</span>
+                    <span className={`text-sm font-medium ${comparison.aovChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {comparison.aovChange >= 0 ? '+' : ''}{comparison.aovChange.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="text-white/40 text-xs mt-1">
+                    {comparison.prevTotalOrders > 0 ? `was ${formatCurrency(comparison.prevTotalRevenue / comparison.prevTotalOrders)}` : 'no previous data'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Revenue vs Profit Chart */}
@@ -881,6 +950,115 @@ export default function Dashboard({ store }: { store: Store }) {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Industry Benchmarks */}
+          <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6 mb-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Industry Benchmarks</h2>
+                <p className="text-white/60 text-sm">How you compare to typical ecommerce stores</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Profit Margin Benchmark */}
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-white/60 text-sm">Profit Margin</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    summary.avgProfitMargin >= 25 ? 'bg-emerald-500/20 text-emerald-400' :
+                    summary.avgProfitMargin >= 15 ? 'bg-amber-500/20 text-amber-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    {summary.avgProfitMargin >= 25 ? 'Above Average' :
+                     summary.avgProfitMargin >= 15 ? 'Average' : 'Below Average'}
+                  </span>
+                </div>
+                <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden mb-2">
+                  <div
+                    className={`absolute left-0 top-0 h-full rounded-full ${
+                      summary.avgProfitMargin >= 25 ? 'bg-emerald-500' :
+                      summary.avgProfitMargin >= 15 ? 'bg-amber-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${Math.min(100, (summary.avgProfitMargin / 40) * 100)}%` }}
+                  />
+                  {/* Benchmark marker at 20% */}
+                  <div className="absolute top-0 h-full w-0.5 bg-white/40" style={{ left: '50%' }} title="Industry avg: 20%"/>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-white font-medium">You: {formatPercent(summary.avgProfitMargin)}</span>
+                  <span className="text-white/40">Industry avg: 15-25%</span>
+                </div>
+              </div>
+
+              {/* AOV Benchmark */}
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-white/60 text-sm">Avg Order Value</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    summary.avgOrderValue >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
+                    summary.avgOrderValue >= 45 ? 'bg-amber-500/20 text-amber-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    {summary.avgOrderValue >= 80 ? 'Above Average' :
+                     summary.avgOrderValue >= 45 ? 'Average' : 'Below Average'}
+                  </span>
+                </div>
+                <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden mb-2">
+                  <div
+                    className={`absolute left-0 top-0 h-full rounded-full ${
+                      summary.avgOrderValue >= 80 ? 'bg-emerald-500' :
+                      summary.avgOrderValue >= 45 ? 'bg-amber-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${Math.min(100, (summary.avgOrderValue / 150) * 100)}%` }}
+                  />
+                  {/* Benchmark marker at ~$60 */}
+                  <div className="absolute top-0 h-full w-0.5 bg-white/40" style={{ left: '40%' }} title="Industry avg: $60"/>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-white font-medium">You: {formatCurrency(summary.avgOrderValue)}</span>
+                  <span className="text-white/40">Industry avg: $45-$80</span>
+                </div>
+              </div>
+
+              {/* Profit Per Order Benchmark */}
+              <div className="bg-white/5 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-white/60 text-sm">Profit Per Order</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    summary.avgProfitPerOrder >= 15 ? 'bg-emerald-500/20 text-emerald-400' :
+                    summary.avgProfitPerOrder >= 8 ? 'bg-amber-500/20 text-amber-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    {summary.avgProfitPerOrder >= 15 ? 'Above Average' :
+                     summary.avgProfitPerOrder >= 8 ? 'Average' : 'Below Average'}
+                  </span>
+                </div>
+                <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden mb-2">
+                  <div
+                    className={`absolute left-0 top-0 h-full rounded-full ${
+                      summary.avgProfitPerOrder >= 15 ? 'bg-emerald-500' :
+                      summary.avgProfitPerOrder >= 8 ? 'bg-amber-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${Math.min(100, (summary.avgProfitPerOrder / 30) * 100)}%` }}
+                  />
+                  {/* Benchmark marker at $12 */}
+                  <div className="absolute top-0 h-full w-0.5 bg-white/40" style={{ left: '40%' }} title="Industry avg: $12"/>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-white font-medium">You: {formatCurrency(summary.avgProfitPerOrder)}</span>
+                  <span className="text-white/40">Industry avg: $8-$15</span>
+                </div>
+              </div>
+            </div>
+            <p className="text-white/30 text-xs mt-4 text-center">
+              Benchmarks based on typical Shopify store data. Individual results may vary by industry.
+            </p>
           </div>
 
           {/* AI Profit Coach */}
