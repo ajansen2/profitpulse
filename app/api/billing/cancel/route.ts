@@ -68,14 +68,16 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', storeId);
 
-    // Log cancellation for analytics
-    await supabase.from('cancellation_feedback').insert({
-      store_id: storeId,
-      reason: reason || 'No reason provided',
-      cancelled_at: new Date().toISOString(),
-    }).catch(() => {
-      // Table might not exist, that's ok
-    });
+    // Log cancellation for analytics (table might not exist, that's ok)
+    try {
+      await supabase.from('cancellation_feedback').insert({
+        store_id: storeId,
+        reason: reason || 'No reason provided',
+        cancelled_at: new Date().toISOString(),
+      });
+    } catch {
+      // Table doesn't exist, ignore
+    }
 
     console.log('✅ [BILLING CANCEL] Subscription cancelled');
 
