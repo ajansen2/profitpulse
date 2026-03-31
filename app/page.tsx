@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Dashboard from './components/Dashboard';
+import LandingPage from './components/LandingPage';
 import { initializeAppBridge, isEmbeddedInShopify, getShopFromUrl } from '@/lib/shopify-app-bridge';
 
 interface Store {
@@ -68,9 +69,9 @@ export default function Home() {
         }
 
         if (!shop) {
-          // Not embedded and no shop param - show landing page or error
+          // Not embedded and no shop param - show landing page
           if (!isEmbeddedInShopify()) {
-            setError('Please open this app from your Shopify admin.');
+            setError('landing'); // Special flag to show landing page
           } else {
             setError('No shop found. Please reinstall the app.');
           }
@@ -161,10 +162,26 @@ export default function Home() {
   }
 
   if (error) {
+    // Show landing page for direct visitors
+    if (error === 'landing') {
+      return <LandingPage />;
+    }
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600">{error}</p>
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <div className="text-center max-w-md px-6">
+          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-2">Something went wrong</h2>
+          <p className="text-white/60 mb-6">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
