@@ -77,6 +77,9 @@ interface AnalyticsData {
   goalProgress?: {
     todayProfit: number;
     monthProfit: number;
+    avgDailyProfit: number;
+    periodProfit: number;
+    periodDays: number;
   };
 }
 
@@ -748,9 +751,18 @@ export default function Dashboard({ store }: { store: Store }) {
             const hasGoals = (profitGoals.daily && profitGoals.daily > 0) || (profitGoals.monthly && profitGoals.monthly > 0);
             if (!hasGoals) return null;
 
-            // Use goalProgress from API (accurate today/month data)
-            const todayProfit = analytics?.goalProgress?.todayProfit || 0;
-            const monthProfit = analytics?.goalProgress?.monthProfit || 0;
+            // Use goalProgress from API
+            const gp = analytics?.goalProgress;
+            const todayProfit = gp?.todayProfit || 0;
+            const monthProfit = gp?.monthProfit || 0;
+            const avgDailyProfit = gp?.avgDailyProfit || 0;
+            const periodProfit = gp?.periodProfit || 0;
+
+            // Use period average as fallback when no today/month data
+            const dailyDisplay = todayProfit > 0 ? todayProfit : avgDailyProfit;
+            const dailyLabel = todayProfit > 0 ? "Today's Profit" : `Avg Daily (${dateRange.days}d)`;
+            const monthlyDisplay = monthProfit > 0 ? monthProfit : periodProfit;
+            const monthlyLabel = monthProfit > 0 ? "This Month" : `Period Total (${dateRange.days}d)`;
 
             return (
               <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-xl p-6 mb-8">
@@ -769,70 +781,74 @@ export default function Dashboard({ store }: { store: Store }) {
                   {profitGoals.daily && profitGoals.daily > 0 && (
                     <div className="bg-white/5 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-white/60 text-sm">Daily Goal</span>
+                        <span className="text-white/60 text-sm">{dailyLabel}</span>
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          todayProfit >= profitGoals.daily
+                          dailyDisplay >= profitGoals.daily
                             ? 'bg-emerald-500/20 text-emerald-400'
-                            : todayProfit >= profitGoals.daily * 0.75
+                            : dailyDisplay >= profitGoals.daily * 0.75
                             ? 'bg-amber-500/20 text-amber-400'
                             : 'bg-white/10 text-white/60'
                         }`}>
-                          {todayProfit >= profitGoals.daily ? 'Goal Met!' : `${Math.round((todayProfit / profitGoals.daily) * 100)}%`}
+                          {dailyDisplay >= profitGoals.daily ? 'On Track!' : `${Math.round((dailyDisplay / profitGoals.daily) * 100)}%`}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-2 mb-3">
-                        <span className={`text-2xl font-bold ${todayProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {formatCurrency(todayProfit)}
+                        <span className={`text-2xl font-bold ${dailyDisplay >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {formatCurrency(dailyDisplay)}
                         </span>
-                        <span className="text-white/40 text-sm">/ {formatCurrency(profitGoals.daily)}</span>
+                        <span className="text-white/40 text-sm">/ {formatCurrency(profitGoals.daily)} goal</span>
                       </div>
                       <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden">
                         <div
                           className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
-                            todayProfit >= profitGoals.daily ? 'bg-emerald-500' : 'bg-emerald-500/70'
+                            dailyDisplay >= profitGoals.daily ? 'bg-emerald-500' : 'bg-emerald-500/70'
                           }`}
-                          style={{ width: `${Math.min(100, Math.max(0, (todayProfit / profitGoals.daily) * 100))}%` }}
+                          style={{ width: `${Math.min(100, Math.max(0, (dailyDisplay / profitGoals.daily) * 100))}%` }}
                         />
                       </div>
                       <p className="text-white/40 text-xs mt-2">
-                        {todayProfit >= profitGoals.daily
-                          ? `Exceeded by ${formatCurrency(todayProfit - profitGoals.daily)}!`
-                          : `${formatCurrency(profitGoals.daily - todayProfit)} to go today`}
+                        {dailyDisplay >= profitGoals.daily
+                          ? `Exceeding goal by ${formatCurrency(dailyDisplay - profitGoals.daily)}`
+                          : todayProfit > 0
+                            ? `${formatCurrency(profitGoals.daily - dailyDisplay)} to go today`
+                            : `Need ${formatCurrency(profitGoals.daily - dailyDisplay)} more daily avg`}
                       </p>
                     </div>
                   )}
                   {profitGoals.monthly && profitGoals.monthly > 0 && (
                     <div className="bg-white/5 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-white/60 text-sm">Monthly Goal</span>
+                        <span className="text-white/60 text-sm">{monthlyLabel}</span>
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          monthProfit >= profitGoals.monthly
+                          monthlyDisplay >= profitGoals.monthly
                             ? 'bg-emerald-500/20 text-emerald-400'
-                            : monthProfit >= profitGoals.monthly * 0.75
+                            : monthlyDisplay >= profitGoals.monthly * 0.75
                             ? 'bg-amber-500/20 text-amber-400'
                             : 'bg-white/10 text-white/60'
                         }`}>
-                          {monthProfit >= profitGoals.monthly ? 'Goal Met!' : `${Math.round((monthProfit / profitGoals.monthly) * 100)}%`}
+                          {monthlyDisplay >= profitGoals.monthly ? 'On Track!' : `${Math.round((monthlyDisplay / profitGoals.monthly) * 100)}%`}
                         </span>
                       </div>
                       <div className="flex items-baseline gap-2 mb-3">
-                        <span className={`text-2xl font-bold ${monthProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {formatCurrency(monthProfit)}
+                        <span className={`text-2xl font-bold ${monthlyDisplay >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {formatCurrency(monthlyDisplay)}
                         </span>
-                        <span className="text-white/40 text-sm">/ {formatCurrency(profitGoals.monthly)}</span>
+                        <span className="text-white/40 text-sm">/ {formatCurrency(profitGoals.monthly)} goal</span>
                       </div>
                       <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden">
                         <div
                           className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
-                            monthProfit >= profitGoals.monthly ? 'bg-emerald-500' : 'bg-cyan-500/70'
+                            monthlyDisplay >= profitGoals.monthly ? 'bg-emerald-500' : 'bg-cyan-500/70'
                           }`}
-                          style={{ width: `${Math.min(100, Math.max(0, (monthProfit / profitGoals.monthly) * 100))}%` }}
+                          style={{ width: `${Math.min(100, Math.max(0, (monthlyDisplay / profitGoals.monthly) * 100))}%` }}
                         />
                       </div>
                       <p className="text-white/40 text-xs mt-2">
-                        {monthProfit >= profitGoals.monthly
-                          ? `Exceeded by ${formatCurrency(monthProfit - profitGoals.monthly)}!`
-                          : `${formatCurrency(profitGoals.monthly - monthProfit)} to go this month`}
+                        {monthlyDisplay >= profitGoals.monthly
+                          ? `Exceeding goal by ${formatCurrency(monthlyDisplay - profitGoals.monthly)}`
+                          : monthProfit > 0
+                            ? `${formatCurrency(profitGoals.monthly - monthlyDisplay)} to go this month`
+                            : `Need ${formatCurrency(profitGoals.monthly - monthlyDisplay)} more in period`}
                       </p>
                     </div>
                   )}

@@ -198,6 +198,10 @@ export async function GET(request: NextRequest) {
     goalProgress: {
       todayProfit,
       monthProfit,
+      // Fallback: average daily profit from selected period for comparison
+      avgDailyProfit: totalOrders > 0 ? totalNetProfit / days : 0,
+      periodProfit: totalNetProfit,
+      periodDays: days,
     },
   });
 }
