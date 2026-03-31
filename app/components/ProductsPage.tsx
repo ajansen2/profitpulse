@@ -305,10 +305,10 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
             <p className="text-white/60 text-sm">{products.length} products with COGS tracking</p>
           </div>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-sm font-medium transition"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white text-xs sm:text-sm font-medium transition"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -407,7 +407,8 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
         </div>
       ) : (
         <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl overflow-hidden">
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[800px]">
             <thead>
               <tr className="border-b border-white/10">
                 <th className="text-left px-6 py-4 text-white/60 text-sm font-medium">Product</th>
@@ -483,6 +484,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination */}
           {totalPages > 1 && (

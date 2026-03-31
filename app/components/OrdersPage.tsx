@@ -305,7 +305,8 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
 
       {/* Orders Table */}
       <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl overflow-hidden mb-6">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[700px]">
           <thead>
             <tr className="border-b border-white/10">
               <th className="text-left px-6 py-4 text-white/60 text-sm font-medium">Order</th>
@@ -359,6 +360,7 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Pagination */}
