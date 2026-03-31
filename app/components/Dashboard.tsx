@@ -87,6 +87,7 @@ export default function Dashboard({ store }: { store: Store }) {
   const [activePage, setActivePage] = useState('dashboard');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
+  const [profitGoals, setProfitGoals] = useState<{ daily?: number; monthly?: number }>({});
 
   // Calculate trial days left
   const getTrialDaysLeft = () => {
@@ -96,6 +97,27 @@ export default function Dashboard({ store }: { store: Store }) {
     const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return Math.max(0, daysLeft);
   };
+
+  // Load profit goals from settings
+  useEffect(() => {
+    async function loadProfitGoals() {
+      try {
+        const res = await fetch(`/api/settings?store_id=${store.id}`);
+        const data = await res.json();
+        if (data.settings) {
+          setProfitGoals({
+            daily: data.settings.profit_goal_daily,
+            monthly: data.settings.profit_goal_monthly,
+          });
+        }
+      } catch (err) {
+        console.error('Error loading profit goals:', err);
+      }
+    }
+    if (store?.id) {
+      loadProfitGoals();
+    }
+  }, [store?.id]);
 
   // Check if first time user for onboarding
   useEffect(() => {
@@ -283,6 +305,30 @@ export default function Dashboard({ store }: { store: Store }) {
       </span>
     );
   };
+
+  // Calculate today's and this month's profit for goal tracking
+  const goalProgress = useMemo(() => {
+    if (!analytics?.chartData) return { todayProfit: 0, monthProfit: 0 };
+
+    const today = new Date().toISOString().split('T')[0];
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    let todayProfit = 0;
+    let monthProfit = 0;
+
+    analytics.chartData.forEach(day => {
+      const dayDate = new Date(day.date);
+      if (day.date === today) {
+        todayProfit = day.profit;
+      }
+      if (dayDate.getMonth() === currentMonth && dayDate.getFullYear() === currentYear) {
+        monthProfit += day.profit;
+      }
+    });
+
+    return { todayProfit, monthProfit };
+  }, [analytics?.chartData]);
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -686,6 +732,115 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             </div>
           </div>
+
+          {/* Profit Goals Progress */}
+          {(profitGoals.daily || profitGoals.monthly) && (
+            <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Profit Goals</h2>
+                  <p className="text-white/60 text-sm">Track your progress towards your targets</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {profitGoals.daily && (
+                  <div className="bg-white/5 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white/60 text-sm">Daily Goal</span>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        goalProgress.todayProfit >= profitGoals.daily
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : goalProgress.todayProfit >= profitGoals.daily * 0.75
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : 'bg-white/10 text-white/60'
+                      }`}>
+                        {goalProgress.todayProfit >= profitGoals.daily ? 'Goal Met!' :
+                         `${Math.round((goalProgress.todayProfit / profitGoals.daily) * 100)}%`}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-3">
+                      <span className={`text-2xl font-bold ${goalProgress.todayProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatCurrency(goalProgress.todayProfit)}
+                      </span>
+                      <span className="text-white/40 text-sm">/ {formatCurrency(profitGoals.daily)}</span>
+                    </div>
+                    <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
+                          goalProgress.todayProfit >= profitGoals.daily
+                            ? 'bg-emerald-500'
+                            : goalProgress.todayProfit >= profitGoals.daily * 0.75
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500/70'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, (goalProgress.todayProfit / profitGoals.daily) * 100))}%` }}
+                      />
+                    </div>
+                    <p className="text-white/40 text-xs mt-2">
+                      {goalProgress.todayProfit >= profitGoals.daily
+                        ? `You've exceeded your goal by ${formatCurrency(goalProgress.todayProfit - profitGoals.daily)}!`
+                        : `${formatCurrency(profitGoals.daily - goalProgress.todayProfit)} to go today`}
+                    </p>
+                  </div>
+                )}
+                {profitGoals.monthly && (
+                  <div className="bg-white/5 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white/60 text-sm">Monthly Goal</span>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        goalProgress.monthProfit >= profitGoals.monthly
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : goalProgress.monthProfit >= profitGoals.monthly * 0.75
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : 'bg-white/10 text-white/60'
+                      }`}>
+                        {goalProgress.monthProfit >= profitGoals.monthly ? 'Goal Met!' :
+                         `${Math.round((goalProgress.monthProfit / profitGoals.monthly) * 100)}%`}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-3">
+                      <span className={`text-2xl font-bold ${goalProgress.monthProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatCurrency(goalProgress.monthProfit)}
+                      </span>
+                      <span className="text-white/40 text-sm">/ {formatCurrency(profitGoals.monthly)}</span>
+                    </div>
+                    <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
+                          goalProgress.monthProfit >= profitGoals.monthly
+                            ? 'bg-emerald-500'
+                            : goalProgress.monthProfit >= profitGoals.monthly * 0.75
+                            ? 'bg-amber-500'
+                            : 'bg-cyan-500/70'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, (goalProgress.monthProfit / profitGoals.monthly) * 100))}%` }}
+                      />
+                    </div>
+                    <p className="text-white/40 text-xs mt-2">
+                      {goalProgress.monthProfit >= profitGoals.monthly
+                        ? `You've exceeded your goal by ${formatCurrency(goalProgress.monthProfit - profitGoals.monthly)}!`
+                        : `${formatCurrency(profitGoals.monthly - goalProgress.monthProfit)} to go this month`}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => navigateTo('settings')}
+                className="mt-4 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Edit Goals in Settings
+              </button>
+            </div>
+          )}
 
           {/* Period Comparison */}
           <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-blue-500/30 rounded-xl p-6 mb-8">
