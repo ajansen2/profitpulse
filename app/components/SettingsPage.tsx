@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Toast, useToast } from './Toast';
 
 interface Store {
   id: string;
@@ -78,6 +79,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { toasts, removeToast, showSuccess, showError, showInfo } = useToast();
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'fees' | 'expenses' | 'adspend' | 'notifications' | 'tools'>('general');
   const [hiddenFees, setHiddenFees] = useState<HiddenFee[]>([]);
@@ -273,7 +275,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
 
       if (!res.ok || data.error) {
         console.error('Save failed:', data.error || 'Unknown error');
-        alert('Failed to save settings: ' + (data.error || 'Unknown error'));
+        showError('Failed to save settings: ' + (data.error || 'Unknown error'));
         return;
       }
 
@@ -286,7 +288,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error('Error saving settings:', err);
-      alert('Failed to save settings. Check console for details.');
+      showError('Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -300,14 +302,14 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       if (data.fees) {
         setHiddenFees(data.fees);
         if (data.fees.length === 0) {
-          alert('Great news! No hidden fees detected. Your profit tracking looks accurate.');
+          showSuccess('No hidden fees detected!');
         }
       } else if (data.message) {
-        alert(data.message);
+        showInfo(data.message);
       }
     } catch (err) {
       console.error('Error scanning fees:', err);
-      alert('Failed to scan for hidden fees. Please sync your orders first.');
+      showError('Failed to scan. Please sync orders first.');
     } finally {
       setScanningFees(false);
     }
@@ -405,10 +407,10 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
         downloadFile(productsCsv, `profitpulse-products-${new Date().toISOString().split('T')[0]}.csv`);
       }
 
-      alert('Export complete! Check your downloads folder.');
+      showSuccess('Export complete! Check your downloads.');
     } catch (err) {
       console.error('Export error:', err);
-      alert('Failed to export data. Please try again.');
+      showError('Failed to export data');
     } finally {
       setExporting(false);
     }
@@ -439,15 +441,15 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       const data = await res.json();
       if (data.success) {
         setShowCancelModal(false);
-        alert('Subscription cancelled. You can continue using ProfitPulse until the end of your billing period.');
+        showSuccess('Subscription cancelled. Access continues until billing period ends.');
         // Refresh the page to update subscription status
         window.location.reload();
       } else {
-        alert('Failed to cancel: ' + (data.error || 'Unknown error'));
+        showError('Failed to cancel: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
       console.error('Error cancelling:', err);
-      alert('Failed to cancel subscription. Please try again.');
+      showError('Failed to cancel subscription');
     } finally {
       setCancelling(false);
     }
@@ -469,6 +471,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
 
   return (
     <div className="p-6">
+      <Toast toasts={toasts} removeToast={removeToast} />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
@@ -635,12 +638,12 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                     });
                     const data = await res.json();
                     if (data.success) {
-                      alert(`Synced ${data.synced} products!`);
+                      showSuccess(`Synced ${data.synced} products!`);
                     } else {
-                      alert('Failed to sync products: ' + (data.error || 'Unknown error'));
+                      showError('Failed to sync products: ' + (data.error || 'Unknown error'));
                     }
                   } catch (error) {
-                    alert('Failed to sync products');
+                    showError('Failed to sync products');
                   }
                   setSaving(false);
                 }}
@@ -660,12 +663,12 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                     });
                     const data = await res.json();
                     if (data.success) {
-                      alert(`Synced ${data.synced} orders!`);
+                      showSuccess(`Synced ${data.synced} orders!`);
                     } else {
-                      alert('Failed to sync orders: ' + (data.error || 'Unknown error'));
+                      showError('Failed to sync orders: ' + (data.error || 'Unknown error'));
                     }
                   } catch (error) {
-                    alert('Failed to sync orders');
+                    showError('Failed to sync orders');
                   }
                   setSaving(false);
                 }}

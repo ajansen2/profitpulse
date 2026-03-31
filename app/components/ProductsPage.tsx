@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { Toast, useToast } from './Toast';
 
 interface Store {
   id: string;
@@ -47,6 +48,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toasts, removeToast, showSuccess, showError } = useToast();
 
   useEffect(() => {
     loadProducts();
@@ -162,7 +164,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
       });
       setShowBulkModal(false);
       setBulkCogs('');
-      alert('COGS updated and order profits recalculated!');
+      showSuccess('COGS updated and profits recalculated!');
     } catch (err) {
       console.error('Error applying bulk COGS:', err);
     } finally {
@@ -208,7 +210,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
       });
 
       setShowBulkEditModal(false);
-      alert('COGS updated and order profits recalculated!');
+      showSuccess('COGS updated and profits recalculated!');
     } catch (err) {
       console.error('Error saving bulk costs:', err);
     } finally {
@@ -289,6 +291,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
 
   return (
     <div className="p-6">
+      <Toast toasts={toasts} removeToast={removeToast} />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
