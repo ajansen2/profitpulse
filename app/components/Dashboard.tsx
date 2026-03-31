@@ -734,7 +734,7 @@ export default function Dashboard({ store }: { store: Store }) {
           </div>
 
           {/* Profit Goals Progress */}
-          {(profitGoals.daily || profitGoals.monthly) && (
+          {(profitGoals.daily && profitGoals.daily > 0) || (profitGoals.monthly && profitGoals.monthly > 0) ? (
             <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-xl p-6 mb-8">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center">
@@ -748,7 +748,7 @@ export default function Dashboard({ store }: { store: Store }) {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {profitGoals.daily && (
+                {profitGoals.daily && profitGoals.daily > 0 && (
                   <div className="bg-white/5 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-white/60 text-sm">Daily Goal</span>
@@ -788,7 +788,7 @@ export default function Dashboard({ store }: { store: Store }) {
                     </p>
                   </div>
                 )}
-                {profitGoals.monthly && (
+                {profitGoals.monthly && profitGoals.monthly > 0 && (
                   <div className="bg-white/5 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-white/60 text-sm">Monthly Goal</span>
@@ -840,7 +840,7 @@ export default function Dashboard({ store }: { store: Store }) {
                 Edit Goals in Settings
               </button>
             </div>
-          )}
+          ) : null}
 
           {/* Period Comparison */}
           <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-blue-500/30 rounded-xl p-6 mb-8">
