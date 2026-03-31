@@ -92,6 +92,30 @@ export async function GET(request: NextRequest) {
   const roas = totalAdSpend > 0 ? totalRevenue / totalAdSpend : 0;
   const profitAfterAds = totalNetProfit - totalAdSpend;
 
+  // Calculate today's profit and this month's profit for goal tracking
+  const today = new Date().toISOString().split('T')[0];
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  let todayProfit = 0;
+  let monthProfit = 0;
+
+  // We need to fetch today's and this month's data separately since they might not be in the selected range
+  const monthStart = new Date(currentYear, currentMonth, 1);
+  const { data: monthOrders } = await supabase
+    .from('orders')
+    .select('net_profit, order_created_at')
+    .eq('store_id', storeId)
+    .gte('order_created_at', monthStart.toISOString());
+
+  for (const order of monthOrders || []) {
+    const orderDate = order.order_created_at?.split('T')[0];
+    if (orderDate === today) {
+      todayProfit += order.net_profit || 0;
+    }
+    monthProfit += order.net_profit || 0;
+  }
+
   // Daily breakdown for chart
   const dailyData: { [key: string]: { revenue: number; profit: number; orders: number; cogs: number } } = {};
 
@@ -171,5 +195,9 @@ export async function GET(request: NextRequest) {
     chartData,
     topProducts: topProductsList,
     recentOrders: orders?.slice(0, 10) || [],
+    goalProgress: {
+      todayProfit,
+      monthProfit,
+    },
   });
 }

@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
       'email_profit_alerts',
       'email_alert_threshold',
       'slack_webhook_url',
+      'onboarding_completed',
     ];
 
     const sanitizedUpdates: Record<string, any> = {};

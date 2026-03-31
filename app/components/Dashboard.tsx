@@ -74,6 +74,10 @@ interface AnalyticsData {
   chartData: ChartData[];
   topProducts: TopProduct[];
   recentOrders: RecentOrder[];
+  goalProgress?: {
+    todayProfit: number;
+    monthProfit: number;
+  };
 }
 
 type DateRangeOption = '7d' | '14d' | '30d' | '90d';
@@ -119,19 +123,49 @@ export default function Dashboard({ store }: { store: Store }) {
     return Math.max(0, daysLeft);
   };
 
-  // Check if first time user for onboarding
+  // Check if first time user for onboarding (check both localStorage and database)
   useEffect(() => {
-    if (store && !loading) {
-      const hasSeenOnboarding = localStorage.getItem(`profitpulse_onboarding_${store.id}`);
-      if (!hasSeenOnboarding) {
-        setShowOnboarding(true);
+    async function checkOnboarding() {
+      if (!store || loading) return;
+
+      // First check localStorage (fast)
+      const localSeen = localStorage.getItem(`profitpulse_onboarding_${store.id}`);
+      if (localSeen === 'true') return;
+
+      // Then check database (authoritative)
+      try {
+        const res = await fetch(`/api/settings?store_id=${store.id}`);
+        const data = await res.json();
+        if (data.settings?.onboarding_completed) {
+          // Sync to localStorage
+          localStorage.setItem(`profitpulse_onboarding_${store.id}`, 'true');
+          return;
+        }
+      } catch (err) {
+        console.error('Error checking onboarding status:', err);
       }
+
+      // Show onboarding if neither localStorage nor database has it
+      setShowOnboarding(true);
     }
+    checkOnboarding();
   }, [store, loading]);
 
-  const completeOnboarding = () => {
+  const completeOnboarding = async () => {
     if (store) {
+      // Save to localStorage immediately
       localStorage.setItem(`profitpulse_onboarding_${store.id}`, 'true');
+
+      // Also save to database (persistent)
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ store_id: store.id, onboarding_completed: true }),
+        });
+      } catch (err) {
+        console.error('Error saving onboarding status:', err);
+      }
     }
     setShowOnboarding(false);
     setOnboardingStep(1);
@@ -712,24 +746,11 @@ export default function Dashboard({ store }: { store: Store }) {
           {/* Profit Goals Progress */}
           {(() => {
             const hasGoals = (profitGoals.daily && profitGoals.daily > 0) || (profitGoals.monthly && profitGoals.monthly > 0);
-            if (!hasGoals || !chartData) return null;
+            if (!hasGoals) return null;
 
-            // Calculate today's and this month's profit
-            const today = new Date().toISOString().split('T')[0];
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
-            let todayProfit = 0;
-            let monthProfit = 0;
-
-            chartData.forEach(day => {
-              const dayDate = new Date(day.date);
-              if (day.date === today) {
-                todayProfit = day.profit || 0;
-              }
-              if (dayDate.getMonth() === currentMonth && dayDate.getFullYear() === currentYear) {
-                monthProfit += (day.profit || 0);
-              }
-            });
+            // Use goalProgress from API (accurate today/month data)
+            const todayProfit = analytics?.goalProgress?.todayProfit || 0;
+            const monthProfit = analytics?.goalProgress?.monthProfit || 0;
 
             return (
               <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-xl p-6 mb-8">
