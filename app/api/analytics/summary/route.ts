@@ -201,6 +201,53 @@ export async function GET(request: NextRequest) {
       .slice(0, 10);
   }
 
+  // Break-even calculations
+  // Variable cost rate = (COGS + fees) / revenue
+  const avgVariableCostRate = totalRevenue > 0
+    ? (totalCogs + totalFees) / totalRevenue
+    : 0.5; // Default 50% if no data
+
+  // Monthly break-even revenue = Fixed costs / (1 - variable cost rate)
+  const contributionMarginRate = 1 - avgVariableCostRate;
+  const monthlyBreakEvenRevenue = contributionMarginRate > 0
+    ? totalMonthlyExpenses / contributionMarginRate
+    : 0;
+
+  // Calculate current month's progress toward break-even
+  const currentDate = new Date();
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const dayOfMonth = currentDate.getDate();
+  const daysRemaining = daysInMonth - dayOfMonth;
+
+  // Get this month's actual revenue
+  const monthRevenue = monthOrders?.reduce((sum, o) => {
+    // monthOrders already has orders from monthStart
+    return sum + (o.net_profit !== undefined ? 0 : 0); // We need actual revenue
+  }, 0) || 0;
+
+  // Re-calculate month revenue from orders that include total_price
+  const { data: monthRevenueOrders } = await supabase
+    .from('orders')
+    .select('total_price')
+    .eq('store_id', storeId)
+    .gte('order_created_at', monthStart.toISOString());
+
+  const actualMonthRevenue = monthRevenueOrders?.reduce((sum, o) => sum + (o.total_price || 0), 0) || 0;
+
+  const breakEvenProgressPercent = monthlyBreakEvenRevenue > 0
+    ? Math.min((actualMonthRevenue / monthlyBreakEvenRevenue) * 100, 100)
+    : 0;
+  const revenueNeededForBreakEven = Math.max(monthlyBreakEvenRevenue - actualMonthRevenue, 0);
+
+  // Average order value for orders needed calculation
+  const avgOrderValueForBreakEven = avgOrderValue > 0 ? avgOrderValue : 50; // Default $50
+  const ordersNeededForBreakEven = revenueNeededForBreakEven > 0
+    ? Math.ceil(revenueNeededForBreakEven / avgOrderValueForBreakEven)
+    : 0;
+  const ordersPerDayNeeded = daysRemaining > 0
+    ? Math.ceil(ordersNeededForBreakEven / daysRemaining)
+    : 0;
+
   return NextResponse.json({
     summary: {
       totalOrders,
@@ -219,6 +266,18 @@ export async function GET(request: NextRequest) {
       totalMonthlyExpenses,
       expensesForPeriod,
       trueNetProfit,
+    },
+    breakEven: {
+      monthlyFixedCosts: totalMonthlyExpenses,
+      avgVariableCostRate,
+      monthlyBreakEvenRevenue,
+      currentMonthRevenue: actualMonthRevenue,
+      progressPercent: breakEvenProgressPercent,
+      revenueNeeded: revenueNeededForBreakEven,
+      ordersNeeded: ordersNeededForBreakEven,
+      ordersPerDayNeeded,
+      daysRemaining,
+      hasReachedBreakEven: actualMonthRevenue >= monthlyBreakEvenRevenue,
     },
     comparison: {
       revenueChange,

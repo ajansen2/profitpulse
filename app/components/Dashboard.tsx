@@ -88,12 +88,35 @@ interface Comparison {
   prevTotalOrders: number;
 }
 
+interface BreakEvenData {
+  monthlyFixedCosts: number;
+  avgVariableCostRate: number;
+  monthlyBreakEvenRevenue: number;
+  currentMonthRevenue: number;
+  progressPercent: number;
+  revenueNeeded: number;
+  ordersNeeded: number;
+  ordersPerDayNeeded: number;
+  daysRemaining: number;
+  hasReachedBreakEven: boolean;
+}
+
+interface ForecastData {
+  predictions: { date: string; predictedProfit: number; confidence: { low: number; high: number } }[];
+  trend: 'up' | 'down' | 'stable';
+  dailyTrend: number;
+  sevenDayForecast: number;
+  confidence: number;
+  narrative: string;
+}
+
 interface AnalyticsData {
   summary: Summary;
   comparison: Comparison;
   chartData: ChartData[];
   topProducts: TopProduct[];
   recentOrders: RecentOrder[];
+  breakEven?: BreakEvenData;
   goalProgress?: {
     todayProfit: number;
     monthProfit: number;
@@ -131,6 +154,8 @@ export default function Dashboard({ store }: { store: Store }) {
     keyMetrics: true,
     trueNetProfit: true,
     profitGoals: true,
+    breakEvenCalculator: true,
+    profitForecast: true,
     periodComparison: true,
     revenueVsProfitChart: true,
     productProfitability: true,
@@ -143,6 +168,8 @@ export default function Dashboard({ store }: { store: Store }) {
   });
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
+  const [forecast, setForecast] = useState<ForecastData | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
 
   // Profit goals are loaded together with analytics to reduce API calls
   // (see loadAnalytics below)
@@ -1077,6 +1104,260 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             );
           })()}
+
+          {/* Break-Even Calculator Widget */}
+          {dashboardWidgets.breakEvenCalculator && analytics?.breakEven && analytics.breakEven.monthlyFixedCosts > 0 && (
+            <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Break-Even Calculator</h2>
+                    <p className="text-white/60 text-sm">Monthly revenue needed to cover fixed costs</p>
+                  </div>
+                </div>
+                {analytics.breakEven.hasReachedBreakEven && (
+                  <span className="px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-full text-emerald-400 text-sm font-medium">
+                    Break-even reached!
+                  </span>
+                )}
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white/60 text-sm">Progress this month</span>
+                  <span className={`text-sm font-medium ${analytics.breakEven.hasReachedBreakEven ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {analytics.breakEven.progressPercent.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="relative h-4 bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${
+                      analytics.breakEven.hasReachedBreakEven ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-500 to-orange-500'
+                    }`}
+                    style={{ width: `${Math.min(analytics.breakEven.progressPercent, 100)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-white/40 text-xs">{formatCurrency(analytics.breakEven.currentMonthRevenue)}</span>
+                  <span className="text-white/40 text-xs">{formatCurrency(analytics.breakEven.monthlyBreakEvenRevenue)} target</span>
+                </div>
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white/5 rounded-lg p-3 text-center">
+                  <div className="text-white/50 text-xs mb-1">Fixed Costs</div>
+                  <div className="text-white font-bold">{formatCurrency(analytics.breakEven.monthlyFixedCosts)}/mo</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3 text-center">
+                  <div className="text-white/50 text-xs mb-1">Break-Even Target</div>
+                  <div className="text-amber-400 font-bold">{formatCurrency(analytics.breakEven.monthlyBreakEvenRevenue)}</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3 text-center">
+                  <div className="text-white/50 text-xs mb-1">Revenue Needed</div>
+                  <div className={`font-bold ${analytics.breakEven.revenueNeeded === 0 ? 'text-emerald-400' : 'text-white'}`}>
+                    {analytics.breakEven.revenueNeeded === 0 ? 'Done!' : formatCurrency(analytics.breakEven.revenueNeeded)}
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3 text-center">
+                  <div className="text-white/50 text-xs mb-1">Orders/Day Needed</div>
+                  <div className={`font-bold ${analytics.breakEven.ordersPerDayNeeded === 0 ? 'text-emerald-400' : 'text-white'}`}>
+                    {analytics.breakEven.ordersPerDayNeeded === 0 ? 'Done!' : `~${analytics.breakEven.ordersPerDayNeeded}`}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-white/40 text-xs mt-4">
+                {analytics.breakEven.daysRemaining} days left in month. Based on your expenses and average variable cost rate of {(analytics.breakEven.avgVariableCostRate * 100).toFixed(0)}%.
+              </p>
+
+              <button
+                onClick={() => navigateTo('settings')}
+                className="mt-3 text-amber-400 hover:text-amber-300 text-sm font-medium transition flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add Expenses for accurate tracking
+              </button>
+            </div>
+          )}
+
+          {/* AI Profit Forecast Widget */}
+          {dashboardWidgets.profitForecast && (
+            <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">AI Profit Forecast</h2>
+                    <p className="text-white/60 text-sm">7-day prediction with AI insights</p>
+                  </div>
+                </div>
+                {!forecast && !forecastLoading && (
+                  <button
+                    onClick={async () => {
+                      setForecastLoading(true);
+                      try {
+                        const res = await fetch('/api/analytics/forecast', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ store_id: store.id, days: 7 }),
+                        });
+                        const data = await res.json();
+                        if (res.ok && !data.error) {
+                          setForecast(data);
+                        }
+                      } catch (err) {
+                        console.error('Forecast error:', err);
+                      }
+                      setForecastLoading(false);
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    Generate Forecast
+                  </button>
+                )}
+              </div>
+
+              {forecastLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-solid border-indigo-500 border-r-transparent"></div>
+                  <span className="ml-3 text-white/60">Analyzing trends...</span>
+                </div>
+              )}
+
+              {forecast && (
+                <div className="space-y-4">
+                  {/* Trend indicator */}
+                  <div className="flex items-center gap-4 p-3 bg-white/5 rounded-lg">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      forecast.trend === 'up' ? 'bg-emerald-500/20' :
+                      forecast.trend === 'down' ? 'bg-red-500/20' : 'bg-gray-500/20'
+                    }`}>
+                      <svg className={`w-6 h-6 ${
+                        forecast.trend === 'up' ? 'text-emerald-400' :
+                        forecast.trend === 'down' ? 'text-red-400 rotate-180' : 'text-gray-400'
+                      }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-white font-medium">
+                        {forecast.trend === 'up' ? 'Upward Trend' :
+                         forecast.trend === 'down' ? 'Downward Trend' : 'Stable Trend'}
+                      </div>
+                      <div className="text-white/60 text-sm">
+                        {forecast.trend === 'stable' ? 'Profit holding steady' :
+                          `${forecast.trend === 'up' ? '+' : ''}${formatCurrency(forecast.dailyTrend)}/day`}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-white/50 text-xs">Confidence</div>
+                      <div className={`text-lg font-bold ${
+                        forecast.confidence >= 70 ? 'text-emerald-400' :
+                        forecast.confidence >= 40 ? 'text-amber-400' : 'text-red-400'
+                      }`}>{forecast.confidence}%</div>
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/5 rounded-lg p-4 text-center">
+                      <div className="text-white/50 text-xs mb-1">7-Day Forecast</div>
+                      <div className={`text-2xl font-bold ${forecast.sevenDayForecast >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {formatCurrency(forecast.sevenDayForecast)}
+                      </div>
+                      <div className="text-white/40 text-xs">predicted profit</div>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 text-center">
+                      <div className="text-white/50 text-xs mb-1">Daily Average</div>
+                      <div className={`text-2xl font-bold ${forecast.sevenDayForecast >= 0 ? 'text-indigo-400' : 'text-red-400'}`}>
+                        {formatCurrency(forecast.sevenDayForecast / 7)}
+                      </div>
+                      <div className="text-white/40 text-xs">per day expected</div>
+                    </div>
+                  </div>
+
+                  {/* Mini chart visualization */}
+                  <div className="bg-white/5 rounded-lg p-4">
+                    <div className="text-white/50 text-xs mb-2">Forecast Timeline</div>
+                    <div className="flex items-end gap-1 h-16">
+                      {forecast.predictions.map((p, i) => {
+                        const maxProfit = Math.max(...forecast.predictions.map(x => Math.abs(x.predictedProfit)), 1);
+                        const height = Math.max(10, (Math.abs(p.predictedProfit) / maxProfit) * 100);
+                        return (
+                          <div
+                            key={i}
+                            className="flex-1 flex flex-col items-center gap-1"
+                            title={`${p.date}: ${formatCurrency(p.predictedProfit)}`}
+                          >
+                            <div
+                              className={`w-full rounded-t transition-all ${
+                                p.predictedProfit >= 0 ? 'bg-indigo-500' : 'bg-red-500'
+                              }`}
+                              style={{ height: `${height}%` }}
+                            />
+                            <span className="text-white/40 text-[10px]">
+                              {new Date(p.date).toLocaleDateString('en-US', { weekday: 'narrow' })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* AI Narrative */}
+                  {forecast.narrative && (
+                    <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <div className="text-indigo-400 text-xs font-medium mb-1">AI Insight</div>
+                          <p className="text-white/80 text-sm italic">&quot;{forecast.narrative}&quot;</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setForecast(null)}
+                    className="text-indigo-400 hover:text-indigo-300 text-sm font-medium transition flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Regenerate Forecast
+                  </button>
+                </div>
+              )}
+
+              {!forecast && !forecastLoading && (
+                <div className="text-center py-6">
+                  <p className="text-white/40 text-sm">
+                    Click &quot;Generate Forecast&quot; to see your 7-day profit prediction with AI-powered insights.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Period Comparison */}
           {dashboardWidgets.periodComparison && (

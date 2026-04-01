@@ -102,6 +102,11 @@ export async function POST(request: NextRequest) {
       'flow_webhook_url',
       'flow_triggers_enabled',
       'flow_trigger_types',
+      // SMS settings
+      'sms_enabled',
+      'sms_phone_number',
+      'sms_daily_digest',
+      'sms_profit_alerts',
     ];
 
     const sanitizedUpdates: Record<string, any> = {};

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { sendSMS, formatDailyDigestSMS } from '@/lib/twilio';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -53,6 +54,26 @@ export async function POST(request: Request) {
           bestProduct: null,
           worstProduct: null,
         });
+
+        // Send SMS digest for no orders if enabled
+        const settings = store.store_settings;
+        if (settings?.sms_enabled && settings?.sms_daily_digest && settings?.sms_phone_number) {
+          try {
+            const dateStr = yesterday.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const smsBody = formatDailyDigestSMS({
+              storeName: store.store_name || store.shop_domain,
+              date: dateStr,
+              orderCount: 0,
+              revenue: 0,
+              profit: 0,
+              margin: 0,
+            });
+            await sendSMS(settings.sms_phone_number, smsBody);
+          } catch (smsError) {
+            console.error('❌ Failed to send SMS digest:', smsError);
+          }
+        }
+
         results.push({ store: store.shop_domain, status: 'sent', orders: 0 });
         continue;
       }
@@ -94,6 +115,26 @@ export async function POST(request: Request) {
         bestProduct,
         worstProduct: worstProduct?.profit < 0 ? worstProduct : null,
       });
+
+      // Send SMS digest if enabled
+      const settings = store.store_settings;
+      if (settings?.sms_enabled && settings?.sms_daily_digest && settings?.sms_phone_number) {
+        try {
+          const dateStr = yesterday.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          const smsBody = formatDailyDigestSMS({
+            storeName: store.store_name || store.shop_domain,
+            date: dateStr,
+            orderCount: orders.length,
+            revenue: totalRevenue,
+            profit: totalProfit,
+            margin: avgMargin,
+          });
+          await sendSMS(settings.sms_phone_number, smsBody);
+          console.log('📱 SMS digest sent for', store.shop_domain);
+        } catch (smsError) {
+          console.error('❌ Failed to send SMS digest:', smsError);
+        }
+      }
 
       results.push({
         store: store.shop_domain,

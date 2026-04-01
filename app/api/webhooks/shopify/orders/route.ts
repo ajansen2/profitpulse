@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { Resend } from 'resend';
 import { getProfitAlertEmail } from '@/lib/email-templates';
+import { sendSMS, formatProfitAlertSMS } from '@/lib/twilio';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -281,6 +282,23 @@ export async function POST(request: NextRequest) {
             console.log('💬 Discord alert sent for order', order.name);
           } catch (discordError) {
             console.error('❌ Failed to send Discord alert:', discordError);
+          }
+        }
+
+        // Send SMS notification
+        if (settings.sms_enabled && settings.sms_profit_alerts && settings.sms_phone_number) {
+          try {
+            const smsBody = formatProfitAlertSMS({
+              storeName: storeData?.store_name || shop || 'Your Store',
+              orderNumber: order.order_number?.toString() || order.name,
+              orderTotal: totalPrice,
+              profit: netProfit,
+              profitMargin,
+              productName: lineItemsToInsert[0]?.title || 'Unknown',
+            });
+            await sendSMS(settings.sms_phone_number, smsBody);
+          } catch (smsError) {
+            console.error('❌ Failed to send SMS alert:', smsError);
           }
         }
 

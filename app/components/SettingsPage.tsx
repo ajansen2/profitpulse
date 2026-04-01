@@ -16,6 +16,8 @@ interface DashboardWidgets {
   keyMetrics: boolean;
   trueNetProfit: boolean;
   profitGoals: boolean;
+  breakEvenCalculator: boolean;
+  profitForecast: boolean;
   periodComparison: boolean;
   revenueVsProfitChart: boolean;
   productProfitability: boolean;
@@ -31,6 +33,8 @@ const DEFAULT_WIDGETS: DashboardWidgets = {
   keyMetrics: true,
   trueNetProfit: true,
   profitGoals: true,
+  breakEvenCalculator: true,
+  profitForecast: true,
   periodComparison: true,
   revenueVsProfitChart: true,
   productProfitability: true,
@@ -63,6 +67,11 @@ interface StoreSettings {
   profit_goal_monthly?: number;
   dashboard_widgets?: DashboardWidgets;
   flow_webhook_url?: string;
+  // SMS settings
+  sms_enabled?: boolean;
+  sms_phone_number?: string;
+  sms_daily_digest?: boolean;
+  sms_profit_alerts?: boolean;
   flow_triggers_enabled?: boolean;
 }
 
@@ -1394,6 +1403,101 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
             </div>
           </div>
 
+          {/* SMS Notifications */}
+          <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">SMS Notifications</h3>
+                <p className="text-white/60 text-sm">Get text message alerts on your phone</p>
+              </div>
+            </div>
+
+            {/* Enable SMS */}
+            <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg mb-4">
+              <div className="flex items-center gap-3">
+                <div>
+                  <span className="text-white font-medium">Enable SMS Alerts</span>
+                  <p className="text-white/40 text-sm">Receive notifications via text message</p>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.sms_enabled || false}
+                onChange={(e) => setSettings({ ...settings, sms_enabled: e.target.checked })}
+                className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+              />
+            </label>
+
+            {settings.sms_enabled && (
+              <div className="space-y-4">
+                {/* Phone Number */}
+                <div>
+                  <label className="text-white/60 text-sm block mb-2">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="+1 (555) 123-4567"
+                    value={settings.sms_phone_number || ''}
+                    onChange={(e) => setSettings({ ...settings, sms_phone_number: e.target.value })}
+                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-green-500"
+                  />
+                  <p className="text-white/40 text-xs mt-1">Include country code (e.g., +1 for US)</p>
+                </div>
+
+                {/* SMS Alert Types */}
+                <div className="space-y-3">
+                  <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span className="text-white font-medium">Daily Digest SMS</span>
+                        <p className="text-white/40 text-sm">Yesterday&apos;s profit summary via text</p>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.sms_daily_digest || false}
+                      onChange={(e) => setSettings({ ...settings, sms_daily_digest: e.target.checked })}
+                      className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span className="text-white font-medium">Low Profit Alerts</span>
+                        <p className="text-white/40 text-sm">Get texted when an order loses money</p>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.sms_profit_alerts !== false}
+                      onChange={(e) => setSettings({ ...settings, sms_profit_alerts: e.target.checked })}
+                      className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+                    />
+                  </label>
+                </div>
+
+                <p className="text-white/40 text-xs">
+                  Standard messaging rates may apply. SMS alerts use the same profit threshold as email alerts.
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
             <h3 className="text-lg font-bold text-white mb-4">Slack & Discord</h3>
             <p className="text-white/60 text-sm mb-4">Get profit alerts in your team chat</p>
@@ -1710,6 +1814,8 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                 { key: 'keyMetrics', label: 'Key Metrics', desc: 'Revenue, Costs, Net Profit, Avg Profit/Order cards' },
                 { key: 'trueNetProfit', label: 'True Net Profit', desc: 'Shows profit after ads & operating expenses' },
                 { key: 'profitGoals', label: 'Profit Goals', desc: 'Daily and monthly goal progress bars' },
+                { key: 'breakEvenCalculator', label: 'Break-Even Calculator', desc: 'Monthly revenue needed to cover fixed costs' },
+                { key: 'profitForecast', label: 'AI Profit Forecast', desc: '7-day profit prediction with AI insights' },
                 { key: 'periodComparison', label: 'Period Comparison', desc: 'Compare current vs previous period' },
                 { key: 'revenueVsProfitChart', label: 'Revenue vs Profit Chart', desc: 'Line chart showing trends' },
                 { key: 'productProfitability', label: 'Product Profitability', desc: 'Top performers vs losers' },
@@ -1755,6 +1861,8 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                     keyMetrics: true,
                     trueNetProfit: false,
                     profitGoals: false,
+                    breakEvenCalculator: false,
+                    profitForecast: false,
                     periodComparison: false,
                     revenueVsProfitChart: false,
                     productProfitability: false,
