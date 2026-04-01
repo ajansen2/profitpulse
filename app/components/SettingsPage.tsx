@@ -141,6 +141,16 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   ]);
   const [bundleDiscount, setBundleDiscount] = useState(10);
 
+  // Multi-store State
+  interface LinkedStore {
+    id: string;
+    shop_domain: string;
+    store_name: string | null;
+    subscription_status: string;
+  }
+  const [linkedStores, setLinkedStores] = useState<LinkedStore[]>([]);
+  const [loadingLinkedStores, setLoadingLinkedStores] = useState(false);
+
   // Break-Even Calculator State
   const [breakEvenProduct, setBreakEvenProduct] = useState({ price: 0, cost: 0, fixedCosts: 0 });
 
@@ -156,7 +166,23 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
     loadSettings();
     loadExpenses();
     loadAdSpend();
+    loadLinkedStores();
   }, [store.id]);
+
+  const loadLinkedStores = async () => {
+    setLoadingLinkedStores(true);
+    try {
+      const res = await fetch(`/api/stores/linked?store_id=${store.id}`);
+      const data = await res.json();
+      if (data.stores) {
+        setLinkedStores(data.stores);
+      }
+    } catch (err) {
+      console.error('Error loading linked stores:', err);
+    } finally {
+      setLoadingLinkedStores(false);
+    }
+  };
 
   const loadAdSpend = async () => {
     try {
@@ -618,6 +644,64 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
               )}
             </div>
           </div>
+
+          {/* Multi-Store Management */}
+          {linkedStores.length > 0 && (
+            <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Your Other Stores</h3>
+                  <p className="text-white/60 text-sm">Manage multiple stores with the same account</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {linkedStores.map((linkedStore) => (
+                  <a
+                    key={linkedStore.id}
+                    href={`https://${linkedStore.shop_domain}/admin/apps/profitpulse`}
+                    target="_top"
+                    className="flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-indigo-500/20 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span className="text-white font-medium">{linkedStore.store_name || linkedStore.shop_domain}</span>
+                        <p className="text-white/40 text-sm">{linkedStore.shop_domain}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                        linkedStore.subscription_status === 'active'
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : linkedStore.subscription_status === 'trial'
+                          ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {linkedStore.subscription_status === 'active' ? 'Pro' :
+                         linkedStore.subscription_status === 'trial' ? 'Trial' :
+                         linkedStore.subscription_status?.charAt(0).toUpperCase() + linkedStore.subscription_status?.slice(1)}
+                      </span>
+                      <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </div>
+                  </a>
+                ))}
+              </div>
+              <p className="text-white/40 text-xs mt-4">
+                Stores are linked by your Shopify account email. Click to switch stores.
+              </p>
+            </div>
+          )}
 
           {/* Profit Goals */}
           <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border-2 border-emerald-500/30 rounded-xl p-6">
