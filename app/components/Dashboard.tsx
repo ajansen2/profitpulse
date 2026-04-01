@@ -124,6 +124,11 @@ interface AnalyticsData {
     periodProfit: number;
     periodDays: number;
   };
+  profitStreak?: {
+    current: number;
+    best: number;
+    isOnStreak: boolean;
+  };
 }
 
 type DateRangeOption = '7d' | '14d' | '30d' | '90d';
@@ -918,6 +923,30 @@ export default function Dashboard({ store }: { store: Store }) {
 
         {activePage === 'dashboard' && (
         <div className="p-6">
+          {/* Profit Streak Banner */}
+          {analytics?.profitStreak?.isOnStreak && (
+            <div className="mb-6 bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-yellow-500/20 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">🔥</div>
+                <div>
+                  <div className="text-white font-bold text-lg">
+                    {analytics.profitStreak.current} Day Profit Streak!
+                  </div>
+                  <div className="text-white/60 text-sm">
+                    {analytics.profitStreak.current >= analytics.profitStreak.best
+                      ? "You're on your best streak! Keep it going!"
+                      : `Best streak: ${analytics.profitStreak.best} days`}
+                  </div>
+                </div>
+              </div>
+              {analytics.profitStreak.current >= 5 && (
+                <div className="hidden sm:block text-4xl animate-bounce">
+                  {analytics.profitStreak.current >= 10 ? '🏆' : analytics.profitStreak.current >= 7 ? '⭐' : '✨'}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Key Metrics - The money stats */}
           {dashboardWidgets.keyMetrics && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -1418,6 +1447,106 @@ export default function Dashboard({ store }: { store: Store }) {
                   <p className="text-white/30 text-xs mt-2">Requires at least 7 days of order history</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* What-If Pricing Calculator */}
+          {dashboardWidgets.whatIfCalculator && analytics && analytics.summary.totalRevenue > 0 && (
+            <div className="bg-gradient-to-r from-pink-500/10 to-orange-500/10 border border-pink-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-pink-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">What-If Calculator</h2>
+                  <p className="text-white/60 text-sm">See how price changes affect your profit</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {/* Slider */}
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white/60 text-sm">Price Change</span>
+                    <span className={`text-lg font-bold ${whatIfPriceChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {whatIfPriceChange >= 0 ? '+' : ''}{whatIfPriceChange}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-30"
+                    max="50"
+                    value={whatIfPriceChange}
+                    onChange={(e) => setWhatIfPriceChange(parseInt(e.target.value))}
+                    className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                  />
+                  <div className="flex justify-between text-xs text-white/40 mt-1">
+                    <span>-30%</span>
+                    <span>0%</span>
+                    <span>+50%</span>
+                  </div>
+                </div>
+
+                {/* Results */}
+                {(() => {
+                  const currentRevenue = analytics.summary.totalRevenue;
+                  const currentProfit = analytics.summary.totalNetProfit;
+                  const currentMargin = analytics.summary.avgProfitMargin;
+                  const currentCosts = currentRevenue - currentProfit;
+
+                  const newRevenue = currentRevenue * (1 + whatIfPriceChange / 100);
+                  const newProfit = newRevenue - currentCosts; // Costs stay same
+                  const newMargin = newRevenue > 0 ? (newProfit / newRevenue) * 100 : 0;
+
+                  const profitChange = newProfit - currentProfit;
+                  const marginChange = newMargin - currentMargin;
+
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="bg-white/5 rounded-lg p-3 text-center">
+                        <div className="text-white/50 text-xs mb-1">New Revenue</div>
+                        <div className="text-white font-bold">{formatCurrency(newRevenue)}</div>
+                        <div className={`text-xs ${whatIfPriceChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {whatIfPriceChange >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(newRevenue - currentRevenue))}
+                        </div>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-3 text-center">
+                        <div className="text-white/50 text-xs mb-1">New Profit</div>
+                        <div className={`font-bold ${newProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {formatCurrency(newProfit)}
+                        </div>
+                        <div className={`text-xs ${profitChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {profitChange >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(profitChange))}
+                        </div>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-3 text-center">
+                        <div className="text-white/50 text-xs mb-1">New Margin</div>
+                        <div className={`font-bold ${newMargin >= currentMargin ? 'text-pink-400' : 'text-orange-400'}`}>
+                          {newMargin.toFixed(1)}%
+                        </div>
+                        <div className={`text-xs ${marginChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {marginChange >= 0 ? '↑' : '↓'} {Math.abs(marginChange).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-3 text-center">
+                        <div className="text-white/50 text-xs mb-1">Per Order</div>
+                        <div className="text-white font-bold">
+                          {formatCurrency(analytics.summary.totalOrders > 0 ? newProfit / analytics.summary.totalOrders : 0)}
+                        </div>
+                        <div className="text-xs text-white/40">
+                          was {formatCurrency(analytics.summary.totalOrders > 0 ? currentProfit / analytics.summary.totalOrders : 0)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <p className="text-white/40 text-xs text-center">
+                  Assumes costs stay constant. Actual results may vary based on demand elasticity.
+                </p>
+              </div>
             </div>
           )}
 

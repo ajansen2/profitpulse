@@ -18,6 +18,7 @@ interface DashboardWidgets {
   profitGoals: boolean;
   breakEvenCalculator: boolean;
   profitForecast: boolean;
+  whatIfCalculator: boolean;
   periodComparison: boolean;
   revenueVsProfitChart: boolean;
   productProfitability: boolean;
@@ -35,6 +36,7 @@ const DEFAULT_WIDGETS: DashboardWidgets = {
   profitGoals: true,
   breakEvenCalculator: true,
   profitForecast: true,
+  whatIfCalculator: true,
   periodComparison: true,
   revenueVsProfitChart: true,
   productProfitability: true,
@@ -1816,6 +1818,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                 { key: 'profitGoals', label: 'Profit Goals', desc: 'Daily and monthly goal progress bars' },
                 { key: 'breakEvenCalculator', label: 'Break-Even Calculator', desc: 'Monthly revenue needed to cover fixed costs' },
                 { key: 'profitForecast', label: 'AI Profit Forecast', desc: '7-day profit prediction with AI insights' },
+                { key: 'whatIfCalculator', label: 'What-If Calculator', desc: 'See how price changes affect profit' },
                 { key: 'periodComparison', label: 'Period Comparison', desc: 'Compare current vs previous period' },
                 { key: 'revenueVsProfitChart', label: 'Revenue vs Profit Chart', desc: 'Line chart showing trends' },
                 { key: 'productProfitability', label: 'Product Profitability', desc: 'Top performers vs losers' },
@@ -1863,6 +1866,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                     profitGoals: false,
                     breakEvenCalculator: false,
                     profitForecast: false,
+                    whatIfCalculator: false,
                     periodComparison: false,
                     revenueVsProfitChart: false,
                     productProfitability: false,

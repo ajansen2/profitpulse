@@ -248,6 +248,33 @@ export async function GET(request: NextRequest) {
     ? Math.ceil(ordersNeededForBreakEven / daysRemaining)
     : 0;
 
+  // Calculate profit streak (consecutive profitable days going backward)
+  let profitStreak = 0;
+  const sortedDailyData = Object.entries(dailyData)
+    .map(([date, data]) => ({ date, ...data }))
+    .sort((a, b) => b.date.localeCompare(a.date)); // Newest first
+
+  for (const day of sortedDailyData) {
+    if (day.profit > 0) {
+      profitStreak++;
+    } else {
+      break; // Streak broken
+    }
+  }
+
+  // Best streak (longest profitable streak in the period)
+  let bestStreak = 0;
+  let currentStreak = 0;
+  const chronologicalData = [...sortedDailyData].reverse(); // Oldest first
+  for (const day of chronologicalData) {
+    if (day.profit > 0) {
+      currentStreak++;
+      bestStreak = Math.max(bestStreak, currentStreak);
+    } else {
+      currentStreak = 0;
+    }
+  }
+
   return NextResponse.json({
     summary: {
       totalOrders,
@@ -298,6 +325,11 @@ export async function GET(request: NextRequest) {
       avgDailyProfit: totalOrders > 0 ? totalNetProfit / days : 0,
       periodProfit: totalNetProfit,
       periodDays: days,
+    },
+    profitStreak: {
+      current: profitStreak,
+      best: bestStreak,
+      isOnStreak: profitStreak >= 2, // Show celebration if 2+ days
     },
   });
 }
