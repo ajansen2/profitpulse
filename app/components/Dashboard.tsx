@@ -290,7 +290,7 @@ export default function Dashboard({ store }: { store: Store }) {
           fetch(`/api/settings?store_id=${store.id}`),
         ]);
 
-        // Handle settings (profit goals + dashboard widgets)
+        // Handle settings (profit goals + dashboard widgets + onboarding)
         if (settingsRes.ok) {
           const settingsData = await settingsRes.json();
           if (settingsData.settings) {
@@ -301,6 +301,12 @@ export default function Dashboard({ store }: { store: Store }) {
             // Load dashboard widget preferences
             if (settingsData.settings.dashboard_widgets) {
               setDashboardWidgets(prev => ({ ...prev, ...settingsData.settings.dashboard_widgets }));
+            }
+            // If onboarding was completed server-side, mark localStorage to prevent showing
+            if (settingsData.settings.onboarding_completed) {
+              const storageKey = `profitpulse_onboarding_${store.id}`;
+              localStorage.setItem(storageKey, 'true');
+              setShowOnboarding(false);
             }
           }
         }
