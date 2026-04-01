@@ -283,6 +283,38 @@ export async function POST(request: NextRequest) {
             console.error('❌ Failed to send Discord alert:', discordError);
           }
         }
+
+        // Send Flow automation trigger
+        if (settings.flow_webhook_url && settings.flow_triggers_enabled) {
+          try {
+            const triggerType = netProfit < 0 ? 'order.unprofitable' : 'order.low_margin';
+            const flowPayload = {
+              event: triggerType,
+              timestamp: new Date().toISOString(),
+              store_id: store.id,
+              data: {
+                order_id: order.id.toString(),
+                order_number: order.order_number?.toString() || order.name,
+                order_total: totalPrice,
+                net_profit: netProfit,
+                profit_margin: profitMargin,
+                cogs: totalCogs,
+                fees: paymentFee + shopifyFee,
+                product: lineItemsToInsert[0]?.title || 'Unknown',
+                customer_email: order.email,
+              },
+            };
+
+            await fetch(settings.flow_webhook_url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(flowPayload),
+            });
+            console.log('📤 Flow trigger sent:', triggerType, 'for order', order.name);
+          } catch (flowError) {
+            console.error('❌ Failed to send Flow trigger:', flowError);
+          }
+        }
       } catch (alertError) {
         console.error('❌ Failed to send profit alert:', alertError);
         // Don't fail the webhook - alert is non-critical

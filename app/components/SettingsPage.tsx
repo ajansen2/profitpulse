@@ -62,6 +62,8 @@ interface StoreSettings {
   profit_goal_daily?: number;
   profit_goal_monthly?: number;
   dashboard_widgets?: DashboardWidgets;
+  flow_webhook_url?: string;
+  flow_triggers_enabled?: boolean;
 }
 
 interface HiddenFee {
@@ -1332,6 +1334,65 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                   className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Flow Automation */}
+          <div className="bg-gradient-to-r from-orange-500/10 to-pink-500/10 border border-orange-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Automation Webhooks</h3>
+                <p className="text-white/60 text-sm">Connect to Shopify Flow, Zapier, Make, or n8n</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
+                <div>
+                  <span className="text-white font-medium">Enable Flow Triggers</span>
+                  <p className="text-white/40 text-sm">Send webhook events for profit conditions</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.flow_triggers_enabled || false}
+                  onChange={(e) => setSettings({ ...settings, flow_triggers_enabled: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+                />
+              </label>
+              {settings.flow_triggers_enabled && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-white/60 text-sm block mb-2">Webhook URL</label>
+                    <input
+                      type="text"
+                      placeholder="https://your-automation-url.com/webhook"
+                      value={settings.flow_webhook_url || ''}
+                      onChange={(e) => setSettings({ ...settings, flow_webhook_url: e.target.value })}
+                      className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                    />
+                    <p className="text-white/40 text-xs mt-1">
+                      Events will be sent as POST requests with JSON payload
+                    </p>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-4">
+                    <p className="text-white/60 text-sm mb-3">Triggers that will fire:</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+                        <span className="text-white/80"><strong>order.unprofitable</strong> - When an order loses money</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 bg-amber-400 rounded-full"></span>
+                        <span className="text-white/80"><strong>order.low_margin</strong> - When profit is below threshold</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

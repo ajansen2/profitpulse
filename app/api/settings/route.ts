@@ -99,6 +99,9 @@ export async function POST(request: NextRequest) {
       'discord_webhook_url',
       'onboarding_completed',
       'dashboard_widgets',
+      'flow_webhook_url',
+      'flow_triggers_enabled',
+      'flow_trigger_types',
     ];
 
     const sanitizedUpdates: Record<string, any> = {};
