@@ -142,37 +142,15 @@ export default function Dashboard({ store }: { store: Store }) {
     return Math.max(0, daysLeft);
   };
 
-  // Check if first time user for onboarding
-  // Only show for truly new users (no orders AND onboarding not completed)
+  // DISABLED: Onboarding tutorial - was showing too frequently
+  // Keeping the state but never showing it
   useEffect(() => {
-    async function checkOnboarding() {
-      if (!store || loading || !analytics) return;
-
-      // First check localStorage (fast)
-      const localSeen = localStorage.getItem(`profitpulse_onboarding_${store.id}`);
-      if (localSeen === 'true') return;
-
-      // If user has ANY orders, they're not new - auto-complete onboarding
-      if (analytics.summary.totalOrders > 0 || analytics.recentOrders.length > 0) {
-        localStorage.setItem(`profitpulse_onboarding_${store.id}`, 'true');
-        // Also save to database so it persists
-        try {
-          await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ store_id: store.id, onboarding_completed: true }),
-          });
-        } catch (err) {
-          console.error('Error auto-completing onboarding:', err);
-        }
-        return;
-      }
-
-      // Only show onboarding for truly new users with 0 orders
-      setShowOnboarding(true);
+    // Always mark as seen to prevent any chance of showing
+    if (store) {
+      localStorage.setItem(`profitpulse_onboarding_${store.id}`, 'true');
     }
-    checkOnboarding();
-  }, [store, loading, analytics]);
+    // Never show onboarding - setShowOnboarding(false) is the default
+  }, [store]);
 
   // Auto-sync historical orders on first load if no orders exist
   useEffect(() => {
@@ -297,6 +275,9 @@ export default function Dashboard({ store }: { store: Store }) {
               totalAdSpend: 0,
               roas: 0,
               profitAfterAds: 0,
+              totalMonthlyExpenses: 0,
+              expensesForPeriod: 0,
+              trueNetProfit: 0,
             },
             comparison: {
               revenueChange: 0,
@@ -333,6 +314,9 @@ export default function Dashboard({ store }: { store: Store }) {
             totalAdSpend: 0,
             roas: 0,
             profitAfterAds: 0,
+            totalMonthlyExpenses: 0,
+            expensesForPeriod: 0,
+            trueNetProfit: 0,
           },
           comparison: {
             revenueChange: 0,
@@ -1327,9 +1311,9 @@ export default function Dashboard({ store }: { store: Store }) {
                     <PieChart>
                       <Pie
                         data={[
-                          { name: 'Net Profit', value: Math.max(0, summary.totalNetProfit), color: '#10b981' },
-                          { name: 'COGS', value: summary.totalCogs, color: '#ef4444' },
-                          { name: 'Fees', value: summary.totalFees, color: '#f59e0b' },
+                          { name: 'Net Profit', value: Math.max(0, summary.totalNetProfit), fill: '#10b981' },
+                          { name: 'COGS', value: summary.totalCogs, fill: '#ef4444' },
+                          { name: 'Fees', value: summary.totalFees, fill: '#f59e0b' },
                         ]}
                         cx="50%"
                         cy="50%"
@@ -1337,15 +1321,8 @@ export default function Dashboard({ store }: { store: Store }) {
                         outerRadius={100}
                         paddingAngle={2}
                         dataKey="value"
-                      >
-                        {[
-                          { name: 'Net Profit', value: Math.max(0, summary.totalNetProfit), color: '#10b981' },
-                          { name: 'COGS', value: summary.totalCogs, color: '#ef4444' },
-                          { name: 'Fees', value: summary.totalFees, color: '#f59e0b' },
-                        ].map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
+                        nameKey="name"
+                      />
                       <Tooltip
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                         formatter={(value) => formatCurrency(value as number)}
