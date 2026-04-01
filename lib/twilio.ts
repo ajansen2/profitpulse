@@ -71,7 +71,7 @@ ${data.profit < 0 ? 'This order lost money!' : 'Low margin alert.'}`;
 }
 
 /**
- * Format a daily digest SMS
+ * Format a daily digest SMS with optional comparison to previous day
  */
 export function formatDailyDigestSMS(data: {
   storeName: string;
@@ -80,6 +80,11 @@ export function formatDailyDigestSMS(data: {
   revenue: number;
   profit: number;
   margin: number;
+  // Optional comparison data
+  prevOrderCount?: number;
+  prevProfit?: number;
+  topProduct?: string;
+  topProductProfit?: number;
 }): string {
   if (data.orderCount === 0) {
     return `📊 ${data.storeName}
@@ -92,13 +97,34 @@ Check back tomorrow!`;
   const profitEmoji = data.profit >= 0 ? '💰' : '📉';
   const profitStr = data.profit >= 0 ? `$${data.profit.toFixed(2)}` : `-$${Math.abs(data.profit).toFixed(2)}`;
 
-  return `📊 ${data.storeName}
+  // Calculate comparisons if previous data available
+  let orderCompare = '';
+  let profitCompare = '';
+
+  if (data.prevOrderCount !== undefined && data.prevOrderCount > 0) {
+    const orderDiff = data.orderCount - data.prevOrderCount;
+    orderCompare = orderDiff >= 0 ? ` (↑${orderDiff} vs yesterday)` : ` (↓${Math.abs(orderDiff)} vs yesterday)`;
+  }
+
+  if (data.prevProfit !== undefined && data.prevProfit !== 0) {
+    const profitChange = ((data.profit - data.prevProfit) / Math.abs(data.prevProfit)) * 100;
+    profitCompare = profitChange >= 0 ? ` (↑${profitChange.toFixed(0)}%)` : ` (↓${Math.abs(profitChange).toFixed(0)}%)`;
+  }
+
+  let message = `📊 ${data.storeName}
 ${data.date}
 
-Orders: ${data.orderCount}
+Orders: ${data.orderCount}${orderCompare}
 Revenue: $${data.revenue.toFixed(2)}
-${profitEmoji} Profit: ${profitStr}
+${profitEmoji} Profit: ${profitStr}${profitCompare}
 Margin: ${data.margin.toFixed(1)}%`;
+
+  // Add top product if available
+  if (data.topProduct && data.topProductProfit !== undefined) {
+    message += `\n\nTop seller: ${data.topProduct} ($${data.topProductProfit.toFixed(0)} profit)`;
+  }
+
+  return message;
 }
 
 /**

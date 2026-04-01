@@ -29,6 +29,11 @@ export async function POST(request: Request) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // For comparison: day before yesterday
+    const dayBeforeYesterday = new Date();
+    dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 2);
+    dayBeforeYesterday.setHours(0, 0, 0, 0);
+
     const results = [];
 
     for (const store of stores) {
@@ -43,6 +48,17 @@ export async function POST(request: Request) {
         .eq('store_id', store.id)
         .gte('order_created_at', yesterday.toISOString())
         .lt('order_created_at', today.toISOString());
+
+      // Get day before yesterday's orders for comparison
+      const { data: prevDayOrders } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('store_id', store.id)
+        .gte('order_created_at', dayBeforeYesterday.toISOString())
+        .lt('order_created_at', yesterday.toISOString());
+
+      const prevOrderCount = prevDayOrders?.length || 0;
+      const prevProfit = prevDayOrders?.reduce((sum, o) => sum + (o.net_profit || 0), 0) || 0;
 
       if (!orders || orders.length === 0) {
         // Still send email even with no orders
@@ -128,6 +144,11 @@ export async function POST(request: Request) {
             revenue: totalRevenue,
             profit: totalProfit,
             margin: avgMargin,
+            // Comparison data
+            prevOrderCount,
+            prevProfit,
+            topProduct: bestProduct?.title,
+            topProductProfit: bestProduct?.profit,
           });
           await sendSMS(settings.sms_phone_number, smsBody);
           console.log('📱 SMS digest sent for', store.shop_domain);

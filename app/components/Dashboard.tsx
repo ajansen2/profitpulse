@@ -156,6 +156,7 @@ export default function Dashboard({ store }: { store: Store }) {
     profitGoals: true,
     breakEvenCalculator: true,
     profitForecast: true,
+    whatIfCalculator: true,
     periodComparison: true,
     revenueVsProfitChart: true,
     productProfitability: true,
@@ -171,6 +172,7 @@ export default function Dashboard({ store }: { store: Store }) {
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState<string | null>(null);
+  const [whatIfPriceChange, setWhatIfPriceChange] = useState(10); // Default 10% price increase
 
   // Profit goals are loaded together with analytics to reduce API calls
   // (see loadAnalytics below)
@@ -527,7 +529,7 @@ export default function Dashboard({ store }: { store: Store }) {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
             <div className="flex justify-center gap-2 mb-6">
-              {[1, 2, 3].map((step) => (
+              {[1, 2, 3, 4, 5, 6].map((step) => (
                 <div
                   key={step}
                   className={`w-2 h-2 rounded-full transition-all ${
@@ -579,6 +581,48 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             )}
 
+            {onboardingStep === 4 && (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Break-Even Calculator</h2>
+                <p className="text-zinc-400 mb-6">
+                  Add your monthly expenses in Settings → Expenses to see how much revenue you need to break even each month.
+                </p>
+              </div>
+            )}
+
+            {onboardingStep === 5 && (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">SMS Profit Alerts</h2>
+                <p className="text-zinc-400 mb-6">
+                  Get text messages for low-profit orders and daily profit summaries. Enable in Settings → Alerts → SMS Notifications.
+                </p>
+              </div>
+            )}
+
+            {onboardingStep === 6 && (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">AI Profit Forecasting</h2>
+                <p className="text-zinc-400 mb-6">
+                  Predict your profits for the next 7 days with AI-powered forecasting. Click "Generate Forecast" on your dashboard.
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-3">
               {onboardingStep > 1 && (
                 <button
@@ -588,7 +632,7 @@ export default function Dashboard({ store }: { store: Store }) {
                   Back
                 </button>
               )}
-              {onboardingStep < 3 ? (
+              {onboardingStep < 6 ? (
                 <button
                   onClick={() => setOnboardingStep(onboardingStep + 1)}
                   className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition"
@@ -605,7 +649,7 @@ export default function Dashboard({ store }: { store: Store }) {
               )}
             </div>
 
-            {onboardingStep < 3 && (
+            {onboardingStep < 6 && (
               <button
                 onClick={completeOnboarding}
                 className="w-full mt-3 text-zinc-500 hover:text-zinc-400 text-sm transition"
