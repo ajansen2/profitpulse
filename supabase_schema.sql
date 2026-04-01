@@ -182,11 +182,14 @@ CREATE TABLE IF NOT EXISTS insights (
 -- For query performance
 -- ============================================
 CREATE INDEX IF NOT EXISTS idx_stores_shop_domain ON stores(shop_domain);
+CREATE INDEX IF NOT EXISTS idx_stores_subscription ON stores(subscription_status);
 CREATE INDEX IF NOT EXISTS idx_orders_store_id ON orders(store_id);
 CREATE INDEX IF NOT EXISTS idx_orders_order_created_at ON orders(order_created_at);
 CREATE INDEX IF NOT EXISTS idx_orders_store_created ON orders(store_id, order_created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_store_created_desc ON orders(store_id, order_created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_order_line_items_order_id ON order_line_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_line_items_store_id ON order_line_items(store_id);
+CREATE INDEX IF NOT EXISTS idx_order_line_items_store_order ON order_line_items(store_id, order_id);
 CREATE INDEX IF NOT EXISTS idx_products_store_id ON products(store_id);
 CREATE INDEX IF NOT EXISTS idx_products_variant ON products(store_id, shopify_variant_id);
 CREATE INDEX IF NOT EXISTS idx_ad_spend_store_date ON ad_spend(store_id, date);

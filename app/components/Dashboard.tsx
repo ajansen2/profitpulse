@@ -1,13 +1,29 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Image from 'next/image';
-import ProductsPage from './ProductsPage';
-import OrdersPage from './OrdersPage';
-import SettingsPage from './SettingsPage';
-import AIProfitCoach from './AIProfitCoach';
+
+// Lazy load heavy components to improve initial page load
+const ProductsPage = lazy(() => import('./ProductsPage'));
+const OrdersPage = lazy(() => import('./OrdersPage'));
+const SettingsPage = lazy(() => import('./SettingsPage'));
+const AIProfitCoach = lazy(() => import('./AIProfitCoach'));
+
+// Dynamically import Recharts to reduce initial bundle (only load when dashboard is shown)
+const LineChart = dynamic(() => import('recharts').then(mod => mod.LineChart), { ssr: false });
+const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false });
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false });
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false });
+const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false });
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
+const BarChart = dynamic(() => import('recharts').then(mod => mod.BarChart), { ssr: false });
+const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false });
+const PieChart = dynamic(() => import('recharts').then(mod => mod.PieChart), { ssr: false });
+const Pie = dynamic(() => import('recharts').then(mod => mod.Pie), { ssr: false });
+const Cell = dynamic(() => import('recharts').then(mod => mod.Cell), { ssr: false });
 
 interface Store {
   id: string;
@@ -85,6 +101,18 @@ interface AnalyticsData {
 
 type DateRangeOption = '7d' | '14d' | '30d' | '90d';
 
+// Loading spinner for lazy-loaded pages
+function PageLoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-solid border-emerald-500 border-r-transparent mb-3"></div>
+        <div className="text-white/60 text-sm">Loading...</div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ store }: { store: Store }) {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,26 +124,8 @@ export default function Dashboard({ store }: { store: Store }) {
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [profitGoals, setProfitGoals] = useState<{ daily: number | null; monthly: number | null }>({ daily: null, monthly: null });
 
-  // Load profit goals from settings
-  useEffect(() => {
-    async function loadProfitGoals() {
-      try {
-        const res = await fetch(`/api/settings?store_id=${store.id}`);
-        const data = await res.json();
-        if (data.settings) {
-          setProfitGoals({
-            daily: data.settings.profit_goal_daily || null,
-            monthly: data.settings.profit_goal_monthly || null,
-          });
-        }
-      } catch (err) {
-        console.error('Error loading profit goals:', err);
-      }
-    }
-    if (store?.id) {
-      loadProfitGoals();
-    }
-  }, [store?.id]);
+  // Profit goals are loaded together with analytics to reduce API calls
+  // (see loadAnalytics below)
 
   // Calculate trial days left
   const getTrialDaysLeft = () => {
@@ -126,33 +136,37 @@ export default function Dashboard({ store }: { store: Store }) {
     return Math.max(0, daysLeft);
   };
 
-  // Check if first time user for onboarding (check both localStorage and database)
+  // Check if first time user for onboarding
+  // Only show for truly new users (no orders AND onboarding not completed)
   useEffect(() => {
     async function checkOnboarding() {
-      if (!store || loading) return;
+      if (!store || loading || !analytics) return;
 
       // First check localStorage (fast)
       const localSeen = localStorage.getItem(`profitpulse_onboarding_${store.id}`);
       if (localSeen === 'true') return;
 
-      // Then check database (authoritative)
-      try {
-        const res = await fetch(`/api/settings?store_id=${store.id}`);
-        const data = await res.json();
-        if (data.settings?.onboarding_completed) {
-          // Sync to localStorage
-          localStorage.setItem(`profitpulse_onboarding_${store.id}`, 'true');
-          return;
+      // If user has ANY orders, they're not new - auto-complete onboarding
+      if (analytics.summary.totalOrders > 0 || analytics.recentOrders.length > 0) {
+        localStorage.setItem(`profitpulse_onboarding_${store.id}`, 'true');
+        // Also save to database so it persists
+        try {
+          await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ store_id: store.id, onboarding_completed: true }),
+          });
+        } catch (err) {
+          console.error('Error auto-completing onboarding:', err);
         }
-      } catch (err) {
-        console.error('Error checking onboarding status:', err);
+        return;
       }
 
-      // Show onboarding if neither localStorage nor database has it
+      // Only show onboarding for truly new users with 0 orders
       setShowOnboarding(true);
     }
     checkOnboarding();
-  }, [store, loading]);
+  }, [store, loading, analytics]);
 
   const completeOnboarding = async () => {
     if (store) {
@@ -183,11 +197,26 @@ export default function Dashboard({ store }: { store: Store }) {
     async function loadAnalytics() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/analytics/summary?store_id=${store.id}&days=${dateRange.days}`);
+        // Fetch analytics and settings in parallel for better performance
+        const [analyticsRes, settingsRes] = await Promise.all([
+          fetch(`/api/analytics/summary?store_id=${store.id}&days=${dateRange.days}`),
+          fetch(`/api/settings?store_id=${store.id}`),
+        ]);
 
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          console.warn('Analytics API error:', res.status, errorData);
+        // Handle settings (profit goals)
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          if (settingsData.settings) {
+            setProfitGoals({
+              daily: settingsData.settings.profit_goal_daily || null,
+              monthly: settingsData.settings.profit_goal_monthly || null,
+            });
+          }
+        }
+
+        if (!analyticsRes.ok) {
+          const errorData = await analyticsRes.json().catch(() => ({}));
+          console.warn('Analytics API error:', analyticsRes.status, errorData);
           // If subscription issue, the user will see the trial banner / upgrade prompt
           // Set empty analytics on error
           setAnalytics({
@@ -221,7 +250,7 @@ export default function Dashboard({ store }: { store: Store }) {
           return;
         }
 
-        const data = await res.json();
+        const data = await analyticsRes.json();
         setAnalytics(data);
       } catch (err) {
         console.error('Error loading analytics:', err);
@@ -678,10 +707,22 @@ export default function Dashboard({ store }: { store: Store }) {
           </div>
         )}
 
-        {/* Page Content */}
-        {activePage === 'products' && <ProductsPage store={store} onBack={() => setActivePage('dashboard')} />}
-        {activePage === 'orders' && <OrdersPage store={store} onBack={() => setActivePage('dashboard')} />}
-        {activePage === 'settings' && <SettingsPage store={store} onBack={() => setActivePage('dashboard')} />}
+        {/* Page Content - Lazy loaded with loading fallback */}
+        {activePage === 'products' && (
+          <Suspense fallback={<PageLoadingSpinner />}>
+            <ProductsPage store={store} onBack={() => setActivePage('dashboard')} />
+          </Suspense>
+        )}
+        {activePage === 'orders' && (
+          <Suspense fallback={<PageLoadingSpinner />}>
+            <OrdersPage store={store} onBack={() => setActivePage('dashboard')} />
+          </Suspense>
+        )}
+        {activePage === 'settings' && (
+          <Suspense fallback={<PageLoadingSpinner />}>
+            <SettingsPage store={store} onBack={() => setActivePage('dashboard')} />
+          </Suspense>
+        )}
 
         {activePage === 'dashboard' && (
         <div className="p-6">
@@ -1246,23 +1287,31 @@ export default function Dashboard({ store }: { store: Store }) {
             </p>
           </div>
 
-          {/* AI Profit Coach */}
+          {/* AI Profit Coach - Lazy loaded */}
           <div className="mb-8">
-            <AIProfitCoach
-              store={store}
-              summary={{
-                totalRevenue: summary.totalRevenue,
-                totalProfit: summary.totalNetProfit,
-                avgProfitMargin: summary.avgProfitMargin,
-                totalOrders: summary.totalOrders,
-              }}
-              topProducts={topProducts.map(p => ({
-                title: p.title,
-                profit: p.profit,
-                margin: p.margin || (p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0),
-                quantity: p.quantity,
-              }))}
-            />
+            <Suspense fallback={
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 animate-pulse">
+                <div className="h-6 bg-zinc-800 rounded w-1/3 mb-4"></div>
+                <div className="h-4 bg-zinc-800 rounded w-full mb-2"></div>
+                <div className="h-4 bg-zinc-800 rounded w-2/3"></div>
+              </div>
+            }>
+              <AIProfitCoach
+                store={store}
+                summary={{
+                  totalRevenue: summary.totalRevenue,
+                  totalProfit: summary.totalNetProfit,
+                  avgProfitMargin: summary.avgProfitMargin,
+                  totalOrders: summary.totalOrders,
+                }}
+                topProducts={topProducts.map(p => ({
+                  title: p.title,
+                  profit: p.profit,
+                  margin: p.margin || (p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0),
+                  quantity: p.quantity,
+                }))}
+              />
+            </Suspense>
           </div>
 
           {/* Cost Breakdown */}

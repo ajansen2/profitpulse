@@ -29,23 +29,49 @@ export async function GET(request: NextRequest) {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
-  // Get orders for period
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('store_id', storeId)
-    .gte('order_created_at', startDate.toISOString())
-    .order('order_created_at', { ascending: false });
-
-  // Get orders for previous period (for comparison)
   const prevStartDate = new Date(startDate);
   prevStartDate.setDate(prevStartDate.getDate() - days);
-  const { data: prevOrders } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('store_id', storeId)
-    .gte('order_created_at', prevStartDate.toISOString())
-    .lt('order_created_at', startDate.toISOString());
+
+  const currentMonth = new Date();
+  const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+
+  // Run all database queries in parallel for better performance
+  const [ordersResult, prevOrdersResult, monthOrdersResult, adSpendResult] = await Promise.all([
+    // Get orders for period
+    supabase
+      .from('orders')
+      .select('*')
+      .eq('store_id', storeId)
+      .gte('order_created_at', startDate.toISOString())
+      .order('order_created_at', { ascending: false }),
+
+    // Get orders for previous period (for comparison)
+    supabase
+      .from('orders')
+      .select('total_price, net_profit')
+      .eq('store_id', storeId)
+      .gte('order_created_at', prevStartDate.toISOString())
+      .lt('order_created_at', startDate.toISOString()),
+
+    // Get current month orders for goal tracking
+    supabase
+      .from('orders')
+      .select('net_profit, order_created_at')
+      .eq('store_id', storeId)
+      .gte('order_created_at', monthStart.toISOString()),
+
+    // Get ad spend for period
+    supabase
+      .from('ad_spend')
+      .select('spend, platform')
+      .eq('store_id', storeId)
+      .gte('date', startDate.toISOString().split('T')[0]),
+  ]);
+
+  const { data: orders, error } = ordersResult;
+  const { data: prevOrders } = prevOrdersResult;
+  const { data: monthOrders } = monthOrdersResult;
+  const { data: adSpend } = adSpendResult;
 
   if (error) {
     console.error('Analytics DB error:', error);
@@ -81,32 +107,16 @@ export async function GET(request: NextRequest) {
   const ordersChange = prevTotalOrders > 0 ? ((totalOrders - prevTotalOrders) / prevTotalOrders) * 100 : 0;
   const aovChange = prevAvgOrderValue > 0 ? ((avgOrderValue - prevAvgOrderValue) / prevAvgOrderValue) * 100 : 0;
 
-  // Get ad spend for period
-  const { data: adSpend } = await supabase
-    .from('ad_spend')
-    .select('spend, platform')
-    .eq('store_id', storeId)
-    .gte('date', startDate.toISOString().split('T')[0]);
-
+  // Ad spend totals (already fetched in parallel above)
   const totalAdSpend = adSpend?.reduce((sum, a) => sum + (a.spend || 0), 0) || 0;
   const roas = totalAdSpend > 0 ? totalRevenue / totalAdSpend : 0;
   const profitAfterAds = totalNetProfit - totalAdSpend;
 
   // Calculate today's profit and this month's profit for goal tracking
+  // (monthOrders already fetched in parallel above)
   const today = new Date().toISOString().split('T')[0];
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-
   let todayProfit = 0;
   let monthProfit = 0;
-
-  // We need to fetch today's and this month's data separately since they might not be in the selected range
-  const monthStart = new Date(currentYear, currentMonth, 1);
-  const { data: monthOrders } = await supabase
-    .from('orders')
-    .select('net_profit, order_created_at')
-    .eq('store_id', storeId)
-    .gte('order_created_at', monthStart.toISOString());
 
   for (const order of monthOrders || []) {
     const orderDate = order.order_created_at?.split('T')[0];

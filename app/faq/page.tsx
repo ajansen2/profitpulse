@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 interface FAQItem {
   question: string;
@@ -113,26 +114,32 @@ export default function FAQPage() {
   const filteredFaqs = activeCategory === 'all' ? faqs : faqs.filter(f => f.category === activeCategory);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto">
-        {/* Back Button - Top Left */}
-        <button
-          onClick={() => window.history.back()}
-          className="mb-6 flex items-center gap-2 text-white/60 hover:text-white text-sm transition group"
-        >
-          <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Settings
-        </button>
-
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-4">Frequently Asked Questions</h1>
-          <p className="text-white/60 text-lg">
-            Everything you need to know about ProfitPulse
-          </p>
+    <div className="min-h-screen bg-zinc-950">
+      {/* Navigation */}
+      <nav className="fixed top-0 w-full z-50 bg-zinc-950/80 backdrop-blur-lg border-b border-white/10">
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-lg">P</span>
+            </div>
+            <span className="text-white font-bold text-xl">ProfitPulse</span>
+          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="text-white/70 hover:text-white transition text-sm">Privacy</Link>
+            <Link href="/terms" className="text-white/70 hover:text-white transition text-sm">Terms</Link>
+          </div>
         </div>
+      </nav>
+
+      <div className="pt-24 pb-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-white mb-4">Frequently Asked Questions</h1>
+            <p className="text-white/60 text-lg">
+              Everything you need to know about ProfitPulse
+            </p>
+          </div>
 
         {/* Category Filter */}
         <div className="flex flex-wrap gap-2 mb-8 justify-center">
@@ -200,16 +207,19 @@ export default function FAQPage() {
           </a>
         </div>
 
-        {/* Back to Dashboard */}
-        <div className="mt-8 text-center">
-          <button
-            onClick={() => window.history.back()}
-            className="text-white/60 hover:text-white text-sm underline transition"
-          >
-            ← Back to Settings
-          </button>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 py-8 px-6">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span className="text-white/40 text-sm">&copy; {new Date().getFullYear()} ProfitPulse by Argora</span>
+          <div className="flex items-center gap-6 text-sm text-white/40">
+            <Link href="/privacy" className="hover:text-white/60 transition">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-white/60 transition">Terms of Service</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

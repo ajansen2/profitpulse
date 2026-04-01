@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { Resend } from 'resend';
+import { getProfitAlertEmail } from '@/lib/email-templates';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
  * Orders Webhook (orders/create, orders/updated)
@@ -172,6 +176,63 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('✅ Order processed:', order.name, 'Net profit:', netProfit.toFixed(2));
+
+    // Send profit alert if order is unprofitable and alerts are enabled
+    const alertThreshold = settings?.email_alert_threshold || 0;
+    if (settings?.email_profit_alerts && netProfit < alertThreshold) {
+      try {
+        // Get store email
+        const { data: storeData } = await supabase
+          .from('stores')
+          .select('email, store_name')
+          .eq('id', store.id)
+          .single();
+
+        const email = settings.notification_email || storeData?.email;
+
+        if (email) {
+          // Determine reason for alert
+          let reason = '';
+          if (netProfit < 0) {
+            const highestCostItem = lineItemsToInsert.reduce((max, item) =>
+              (item.total_cost > (max?.total_cost || 0)) ? item : max, lineItemsToInsert[0]);
+            reason = `This order resulted in a ${Math.abs(netProfit).toFixed(2)} loss. `;
+            if (totalCogs > grossProfit + paymentFee + shopifyFee) {
+              reason += `The cost of goods (${totalCogs.toFixed(2)}) exceeds the revenue minus fees.`;
+            } else {
+              reason += `The combination of COGS, payment fees, and Shopify fees exceeded the order value.`;
+            }
+          } else {
+            reason = `This order has a profit margin of only ${profitMargin.toFixed(1)}%, which is below your alert threshold of ${alertThreshold > 0 ? '$' + alertThreshold : '0% (any unprofitable order)'}.`;
+          }
+
+          const mainProduct = lineItemsToInsert[0]?.title || 'Unknown product';
+
+          const { subject, html } = getProfitAlertEmail({
+            storeName: storeData?.store_name || shop || 'Your Store',
+            orderNumber: order.order_number?.toString() || order.name,
+            orderTotal: totalPrice,
+            profit: netProfit,
+            profitMargin,
+            productName: mainProduct,
+            reason,
+          });
+
+          await resend.emails.send({
+            from: 'ProfitPulse <noreply@send.argora.ai>',
+            to: email,
+            subject,
+            html,
+          });
+
+          console.log('📧 Profit alert sent for order', order.name);
+        }
+      } catch (alertError) {
+        console.error('❌ Failed to send profit alert:', alertError);
+        // Don't fail the webhook - alert is non-critical
+      }
+    }
+
     return NextResponse.json({ success: true });
 
   } catch (error) {
