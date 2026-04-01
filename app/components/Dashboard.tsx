@@ -373,11 +373,35 @@ export default function Dashboard({ store }: { store: Store }) {
     return `${value.toFixed(1)}%`;
   };
 
+  // Refresh settings (dashboard widgets, profit goals) from API
+  const refreshSettings = async () => {
+    try {
+      const res = await fetch(`/api/settings?store_id=${store.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.settings) {
+          setProfitGoals({
+            daily: data.settings.profit_goal_daily || null,
+            monthly: data.settings.profit_goal_monthly || null,
+          });
+          if (data.settings.dashboard_widgets) {
+            setDashboardWidgets(prev => ({ ...prev, ...data.settings.dashboard_widgets }));
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error refreshing settings:', err);
+    }
+  };
+
   // Navigation handler
   const navigateTo = (page: string) => {
     setActivePage(page);
     setSidebarOpen(false);
-    // For now, just update state. In production, use Next.js router with ?shop param
+    // Refresh settings when navigating to dashboard (picks up changes from Settings page)
+    if (page === 'dashboard') {
+      refreshSettings();
+    }
   };
 
   // Loading skeleton
