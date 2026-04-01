@@ -96,6 +96,7 @@ interface Expense {
 interface SettingsPageProps {
   store: Store;
   onBack: () => void;
+  onExpenseChange?: () => void;
 }
 
 const SHOPIFY_PLANS = [
@@ -105,7 +106,7 @@ const SHOPIFY_PLANS = [
   { value: 'plus', label: 'Shopify Plus', rate: 0 },
 ];
 
-export default function SettingsPage({ store, onBack }: SettingsPageProps) {
+export default function SettingsPage({ store, onBack, onExpenseChange }: SettingsPageProps) {
   const [settings, setSettings] = useState<StoreSettings>({
     default_cogs_percentage: 30,
     default_shipping_cost: 0,
@@ -278,6 +279,8 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
       if (data.expense) {
         setExpenses([data.expense, ...expenses]);
         setNewExpense({ name: '', amount: '', frequency: 'monthly', category: 'other' });
+        // Trigger dashboard refresh
+        onExpenseChange?.();
       }
     } catch (err) {
       console.error('Error adding expense:', err);
@@ -288,6 +291,8 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
     try {
       await fetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
       setExpenses(expenses.filter(e => e.id !== id));
+      // Trigger dashboard refresh
+      onExpenseChange?.();
     } catch (err) {
       console.error('Error deleting expense:', err);
     }

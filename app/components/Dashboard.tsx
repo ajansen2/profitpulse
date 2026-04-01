@@ -178,6 +178,10 @@ export default function Dashboard({ store }: { store: Store }) {
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [whatIfPriceChange, setWhatIfPriceChange] = useState(10); // Default 10% price increase
+  const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
+
+  // Refresh analytics when expenses change
+  const refreshAnalytics = () => setAnalyticsRefreshKey(prev => prev + 1);
 
   // Profit goals are loaded together with analytics to reduce API calls
   // (see loadAnalytics below)
@@ -399,7 +403,7 @@ export default function Dashboard({ store }: { store: Store }) {
     }
 
     loadAnalytics();
-  }, [store.id, dateRange.days]);
+  }, [store.id, dateRange.days, analyticsRefreshKey]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -917,7 +921,7 @@ export default function Dashboard({ store }: { store: Store }) {
         )}
         {activePage === 'settings' && (
           <Suspense fallback={<PageLoadingSpinner />}>
-            <SettingsPage store={store} onBack={() => setActivePage('dashboard')} />
+            <SettingsPage store={store} onBack={() => setActivePage('dashboard')} onExpenseChange={refreshAnalytics} />
           </Suspense>
         )}
 
