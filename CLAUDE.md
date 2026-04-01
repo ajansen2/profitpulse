@@ -36,6 +36,52 @@ Once approved, this becomes the #1 priority product:
 
 ---
 
+## Competitive Edge Features (Added April 2026)
+
+Four features to differentiate from TrueProfit/BeProfit:
+
+### 1. Break-Even Calculator Widget
+- Shows monthly revenue needed to cover fixed costs
+- Progress bar toward break-even
+- Orders/day needed calculation
+- **Requires:** Expenses to be added in Settings > Expenses
+
+### 2. SMS Alerts via Twilio
+- Text message notifications for profit alerts and daily digests
+- Settings in: Settings > Alerts > SMS Notifications
+- Uses Twilio credentials from argora-voice
+- **Files:** `/lib/twilio.ts`, SMS settings in `store_settings` table
+
+### 3. AI Profit Forecasting
+- 7-day profit prediction using linear regression
+- Claude Haiku generates narrative insights
+- **Requires:** 7+ unique days of order history
+- **File:** `/app/api/analytics/forecast/route.ts`
+
+### 4. COGS CSV Upload
+- Bulk import product costs via CSV (SKU, cost columns)
+- Already in Products page > Import CSV button
+- **File:** `/app/api/products/import-csv/route.ts`
+
+### Environment Variables for SMS
+```
+TWILIO_ACCOUNT_SID=REDACTED_TWILIO_SID
+TWILIO_AUTH_TOKEN=REDACTED_TWILIO_TOKEN
+TWILIO_PHONE_NUMBER=REDACTED_PHONE
+```
+
+### Database Migration for SMS
+Run in Supabase SQL Editor:
+```sql
+ALTER TABLE store_settings
+ADD COLUMN IF NOT EXISTS sms_enabled BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS sms_phone_number TEXT DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS sms_daily_digest BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS sms_profit_alerts BOOLEAN DEFAULT true;
+```
+
+---
+
 ## Tech Stack
 
 - Next.js 16 + React 19
@@ -43,15 +89,22 @@ Once approved, this becomes the #1 priority product:
 - Supabase (PostgreSQL)
 - Shopify App Bridge (embedded app)
 - Recharts (charts)
+- Twilio (SMS notifications)
+- Anthropic Claude (AI insights & forecasting)
 
 ---
 
 ## Key Files
 
-- `/app/page.tsx` - Main dashboard
-- `/app/api/webhooks/shopify/orders/route.ts` - Order sync webhook
+- `/app/page.tsx` - Main entry point
+- `/app/components/Dashboard.tsx` - Main dashboard with widgets
+- `/app/components/SettingsPage.tsx` - Settings UI (all tabs)
+- `/app/api/webhooks/shopify/orders/route.ts` - Order sync webhook + alerts
+- `/app/api/analytics/summary/route.ts` - Analytics + break-even calculations
+- `/app/api/analytics/forecast/route.ts` - AI profit forecasting
 - `/app/api/products/route.ts` - Product COGS management
-- `/app/api/settings/route.ts` - Store settings (fees, default margin)
+- `/app/api/settings/route.ts` - Store settings
+- `/lib/twilio.ts` - SMS notifications
 - `/lib/shopify-app-bridge.ts` - Shopify integration
 
 ---

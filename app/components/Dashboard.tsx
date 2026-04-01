@@ -170,6 +170,7 @@ export default function Dashboard({ store }: { store: Store }) {
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState<string | null>(null);
 
   // Profit goals are loaded together with analytics to reduce API calls
   // (see loadAnalytics below)
@@ -1208,6 +1209,7 @@ export default function Dashboard({ store }: { store: Store }) {
                   <button
                     onClick={async () => {
                       setForecastLoading(true);
+                      setForecastError(null);
                       try {
                         const res = await fetch('/api/analytics/forecast', {
                           method: 'POST',
@@ -1217,9 +1219,12 @@ export default function Dashboard({ store }: { store: Store }) {
                         const data = await res.json();
                         if (res.ok && !data.error) {
                           setForecast(data);
+                        } else {
+                          setForecastError(data.message || data.error || 'Failed to generate forecast');
                         }
                       } catch (err) {
                         console.error('Forecast error:', err);
+                        setForecastError('Failed to connect to forecast service');
                       }
                       setForecastLoading(false);
                     }}
@@ -1351,9 +1356,16 @@ export default function Dashboard({ store }: { store: Store }) {
 
               {!forecast && !forecastLoading && (
                 <div className="text-center py-6">
-                  <p className="text-white/40 text-sm">
-                    Click &quot;Generate Forecast&quot; to see your 7-day profit prediction with AI-powered insights.
-                  </p>
+                  {forecastError ? (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
+                      <p className="text-red-400 text-sm">{forecastError}</p>
+                    </div>
+                  ) : (
+                    <p className="text-white/40 text-sm">
+                      Click &quot;Generate Forecast&quot; to see your 7-day profit prediction with AI-powered insights.
+                    </p>
+                  )}
+                  <p className="text-white/30 text-xs mt-2">Requires at least 7 days of order history</p>
                 </div>
               )}
             </div>

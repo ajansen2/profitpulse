@@ -94,6 +94,52 @@ export function getHostFromUrl(): string | null {
   return urlParams.get('host') || null;
 }
 
+// Redirect to Shopify admin if app is opened standalone (not embedded)
+export function redirectToShopifyAdmin(shop: string): boolean {
+  const isEmbedded = window.self !== window.top;
+  if (isEmbedded) return false;
+
+  const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || '8d2e3d5d49c8c9253a5781ae3e8a02da';
+  const storeName = shop.replace('.myshopify.com', '');
+  const adminUrl = `https://admin.shopify.com/store/${storeName}/apps/${apiKey}`;
+
+  console.log('🔄 Redirecting to Shopify admin:', adminUrl);
+  window.location.href = adminUrl;
+  return true;
+}
+
+// Redirect to external URL (like OAuth or billing) - breaks out of iframe
+export function redirectToOAuth(url: string) {
+  const isEmbedded = window.self !== window.top;
+
+  if (!isEmbedded) {
+    window.location.href = url;
+    return;
+  }
+
+  // Try multiple methods to break out of iframe
+  try {
+    const opened = window.open(url, '_top');
+    if (opened !== null) return;
+  } catch (e) {}
+
+  try {
+    if (window.parent) {
+      window.parent.location.href = url;
+      return;
+    }
+  } catch (e) {}
+
+  try {
+    if (window.top) {
+      window.top.location.href = url;
+      return;
+    }
+  } catch (e) {}
+
+  window.location.href = url;
+}
+
 // Redirect that works both inside and outside iframe
 export function redirectToInstall(shop: string) {
   const installUrl = `/api/auth/shopify/install?shop=${encodeURIComponent(shop)}`;
