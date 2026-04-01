@@ -127,6 +127,20 @@ export default function Dashboard({ store }: { store: Store }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [profitGoals, setProfitGoals] = useState<{ daily: number | null; monthly: number | null }>({ daily: null, monthly: null });
+  const [dashboardWidgets, setDashboardWidgets] = useState({
+    keyMetrics: true,
+    trueNetProfit: true,
+    profitGoals: true,
+    periodComparison: true,
+    revenueVsProfitChart: true,
+    productProfitability: true,
+    dailyOrdersChart: true,
+    revenueBreakdownPie: true,
+    industryBenchmarks: true,
+    aiProfitCoach: true,
+    costBreakdown: true,
+    recentOrders: true,
+  });
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
 
@@ -245,7 +259,7 @@ export default function Dashboard({ store }: { store: Store }) {
           fetch(`/api/settings?store_id=${store.id}`),
         ]);
 
-        // Handle settings (profit goals)
+        // Handle settings (profit goals + dashboard widgets)
         if (settingsRes.ok) {
           const settingsData = await settingsRes.json();
           if (settingsData.settings) {
@@ -253,6 +267,10 @@ export default function Dashboard({ store }: { store: Store }) {
               daily: settingsData.settings.profit_goal_daily || null,
               monthly: settingsData.settings.profit_goal_monthly || null,
             });
+            // Load dashboard widget preferences
+            if (settingsData.settings.dashboard_widgets) {
+              setDashboardWidgets(prev => ({ ...prev, ...settingsData.settings.dashboard_widgets }));
+            }
           }
         }
 
@@ -796,6 +814,7 @@ export default function Dashboard({ store }: { store: Store }) {
         {activePage === 'dashboard' && (
         <div className="p-6">
           {/* Key Metrics - The money stats */}
+          {dashboardWidgets.keyMetrics && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-2">
@@ -855,9 +874,10 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             </div>
           </div>
+          )}
 
           {/* True Net Profit - After ALL Costs */}
-          {(summary.totalAdSpend > 0 || summary.expensesForPeriod > 0) && (
+          {dashboardWidgets.trueNetProfit && (summary.totalAdSpend > 0 || summary.expensesForPeriod > 0) && (
             <div className="bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-red-500/10 border border-purple-500/30 rounded-xl p-6 mb-8">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -911,7 +931,7 @@ export default function Dashboard({ store }: { store: Store }) {
           )}
 
           {/* Profit Goals Progress */}
-          {(() => {
+          {dashboardWidgets.profitGoals && (() => {
             const hasGoals = (profitGoals.daily && profitGoals.daily > 0) || (profitGoals.monthly && profitGoals.monthly > 0);
             if (!hasGoals) return null;
 
@@ -1032,6 +1052,7 @@ export default function Dashboard({ store }: { store: Store }) {
           })()}
 
           {/* Period Comparison */}
+          {dashboardWidgets.periodComparison && (
           <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-emerald-500/10 border border-blue-500/30 rounded-xl p-6 mb-8">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
@@ -1104,10 +1125,12 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             )}
           </div>
+          )}
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Revenue vs Profit Chart */}
+            {dashboardWidgets.revenueVsProfitChart && (
             <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-white">Revenue vs Profit</h2>
@@ -1161,8 +1184,10 @@ export default function Dashboard({ store }: { store: Store }) {
                 </ResponsiveContainer>
               </div>
             </div>
+            )}
 
             {/* Top Products by Profit */}
+            {dashboardWidgets.productProfitability && (
             <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -1271,11 +1296,13 @@ export default function Dashboard({ store }: { store: Store }) {
                 );
               })()}
             </div>
+            )}
           </div>
 
           {/* Additional Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Daily Orders Bar Chart */}
+            {dashboardWidgets.dailyOrdersChart && (
             <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <h2 className="text-lg font-bold text-white mb-6">Daily Orders</h2>
               <div className="h-64">
@@ -1301,8 +1328,10 @@ export default function Dashboard({ store }: { store: Store }) {
                 </ResponsiveContainer>
               </div>
             </div>
+            )}
 
             {/* Cost Breakdown Pie Chart */}
+            {dashboardWidgets.revenueBreakdownPie && (
             <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <h2 className="text-lg font-bold text-white mb-6">Revenue Breakdown</h2>
               <div className="h-64 flex items-center justify-center">
@@ -1350,9 +1379,11 @@ export default function Dashboard({ store }: { store: Store }) {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {/* Industry Benchmarks */}
+          {dashboardWidgets.industryBenchmarks && (
           <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6 mb-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
@@ -1460,8 +1491,10 @@ export default function Dashboard({ store }: { store: Store }) {
               Benchmarks based on typical Shopify store data. Individual results may vary by industry.
             </p>
           </div>
+          )}
 
           {/* AI Profit Coach - Lazy loaded */}
+          {dashboardWidgets.aiProfitCoach && (
           <div className="mb-8">
             <Suspense fallback={
               <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 animate-pulse">
@@ -1487,8 +1520,10 @@ export default function Dashboard({ store }: { store: Store }) {
               />
             </Suspense>
           </div>
+          )}
 
           {/* Cost Breakdown */}
+          {dashboardWidgets.costBreakdown && (
           <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6 mb-8">
             <h2 className="text-lg font-bold text-white mb-6">Where Your Money Goes</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1518,9 +1553,10 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
             </div>
           </div>
+          )}
 
           {/* Recent Orders */}
-          {recentOrders && recentOrders.length > 0 && (
+          {dashboardWidgets.recentOrders && recentOrders && recentOrders.length > 0 && (
             <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-white">Recent Orders</h2>

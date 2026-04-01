@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       'slack_webhook_url',
       'discord_webhook_url',
       'onboarding_completed',
+      'dashboard_widgets',
     ];
 
     const sanitizedUpdates: Record<string, any> = {};

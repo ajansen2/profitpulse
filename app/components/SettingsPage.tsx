@@ -12,6 +12,36 @@ interface Store {
   trial_ends_at: string | null;
 }
 
+interface DashboardWidgets {
+  keyMetrics: boolean;
+  trueNetProfit: boolean;
+  profitGoals: boolean;
+  periodComparison: boolean;
+  revenueVsProfitChart: boolean;
+  productProfitability: boolean;
+  dailyOrdersChart: boolean;
+  revenueBreakdownPie: boolean;
+  industryBenchmarks: boolean;
+  aiProfitCoach: boolean;
+  costBreakdown: boolean;
+  recentOrders: boolean;
+}
+
+const DEFAULT_WIDGETS: DashboardWidgets = {
+  keyMetrics: true,
+  trueNetProfit: true,
+  profitGoals: true,
+  periodComparison: true,
+  revenueVsProfitChart: true,
+  productProfitability: true,
+  dailyOrdersChart: true,
+  revenueBreakdownPie: true,
+  industryBenchmarks: true,
+  aiProfitCoach: true,
+  costBreakdown: true,
+  recentOrders: true,
+};
+
 interface StoreSettings {
   id?: string;
   default_cogs_percentage: number;
@@ -31,6 +61,7 @@ interface StoreSettings {
   notification_email?: string;
   profit_goal_daily?: number;
   profit_goal_monthly?: number;
+  dashboard_widgets?: DashboardWidgets;
 }
 
 interface HiddenFee {
@@ -82,7 +113,8 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   const [saving, setSaving] = useState(false);
   const { toasts, removeToast, showSuccess, showError, showInfo } = useToast();
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'fees' | 'expenses' | 'adspend' | 'notifications' | 'tools'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'fees' | 'expenses' | 'adspend' | 'notifications' | 'tools' | 'dashboard'>('general');
+  const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidgets>(DEFAULT_WIDGETS);
   const [hiddenFees, setHiddenFees] = useState<HiddenFee[]>([]);
   const [scanningFees, setScanningFees] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -251,6 +283,11 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
         }
         console.log('📖 Merged settings:', merged);
         setSettings(merged);
+
+        // Load dashboard widgets (merge with defaults)
+        if (data.settings.dashboard_widgets) {
+          setDashboardWidgets({ ...DEFAULT_WIDGETS, ...data.settings.dashboard_widgets });
+        }
       }
     } catch (err) {
       console.error('Error loading settings:', err);
@@ -262,7 +299,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      const payload = { store_id: store.id, ...settings };
+      const payload = { store_id: store.id, ...settings, dashboard_widgets: dashboardWidgets };
       console.log('💾 Saving settings:', payload);
 
       const res = await fetch('/api/settings', {
@@ -522,6 +559,7 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
           { id: 'adspend', label: 'Ad Spend', icon: 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z' },
           { id: 'notifications', label: 'Alerts', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
           { id: 'tools', label: 'Profit Tools', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
+          { id: 'dashboard', label: 'Dashboard', icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1502,6 +1540,96 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dashboard Customization */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-6">
+          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Dashboard Widgets</h3>
+                <p className="text-white/60 text-sm">Choose which widgets to show on your dashboard</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { key: 'keyMetrics', label: 'Key Metrics', desc: 'Revenue, Costs, Net Profit, Avg Profit/Order cards' },
+                { key: 'trueNetProfit', label: 'True Net Profit', desc: 'Shows profit after ads & operating expenses' },
+                { key: 'profitGoals', label: 'Profit Goals', desc: 'Daily and monthly goal progress bars' },
+                { key: 'periodComparison', label: 'Period Comparison', desc: 'Compare current vs previous period' },
+                { key: 'revenueVsProfitChart', label: 'Revenue vs Profit Chart', desc: 'Line chart showing trends' },
+                { key: 'productProfitability', label: 'Product Profitability', desc: 'Top performers vs losers' },
+                { key: 'dailyOrdersChart', label: 'Daily Orders Chart', desc: 'Bar chart of daily order volume' },
+                { key: 'revenueBreakdownPie', label: 'Revenue Breakdown', desc: 'Pie chart showing profit, COGS, fees' },
+                { key: 'industryBenchmarks', label: 'Industry Benchmarks', desc: 'Compare to typical ecommerce stores' },
+                { key: 'aiProfitCoach', label: 'AI Profit Coach', desc: 'AI-powered recommendations' },
+                { key: 'costBreakdown', label: 'Cost Breakdown', desc: 'Where your money goes detail' },
+                { key: 'recentOrders', label: 'Recent Orders', desc: 'Latest 5 orders with profit' },
+              ].map((widget) => (
+                <label
+                  key={widget.key}
+                  className={`flex items-center gap-4 p-4 rounded-lg border cursor-pointer transition ${
+                    dashboardWidgets[widget.key as keyof DashboardWidgets]
+                      ? 'bg-emerald-500/10 border-emerald-500/30'
+                      : 'bg-white/5 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={dashboardWidgets[widget.key as keyof DashboardWidgets]}
+                    onChange={(e) => setDashboardWidgets({ ...dashboardWidgets, [widget.key]: e.target.checked })}
+                    className="w-5 h-5 rounded border-white/30 bg-white/10 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+                  />
+                  <div className="flex-1">
+                    <span className="text-white font-medium">{widget.label}</span>
+                    <p className="text-white/40 text-sm">{widget.desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setDashboardWidgets(DEFAULT_WIDGETS)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition"
+              >
+                Reset to Defaults
+              </button>
+              <button
+                onClick={() => {
+                  setDashboardWidgets({
+                    keyMetrics: true,
+                    trueNetProfit: false,
+                    profitGoals: false,
+                    periodComparison: false,
+                    revenueVsProfitChart: false,
+                    productProfitability: false,
+                    dailyOrdersChart: false,
+                    revenueBreakdownPie: false,
+                    industryBenchmarks: false,
+                    aiProfitCoach: false,
+                    costBreakdown: false,
+                    recentOrders: false,
+                  });
+                }}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition"
+              >
+                Minimal View
+              </button>
+            </div>
+
+            <p className="text-white/40 text-sm mt-4">
+              Changes are saved when you click &quot;Save Changes&quot; at the top of the page.
+            </p>
           </div>
         </div>
       )}
