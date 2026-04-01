@@ -27,6 +27,7 @@ interface StoreSettings {
   email_profit_alerts: boolean;
   email_alert_threshold: number;
   slack_webhook_url?: string;
+  discord_webhook_url?: string;
   notification_email?: string;
   profit_goal_daily?: number;
   profit_goal_monthly?: number;
@@ -1270,17 +1271,29 @@ export default function SettingsPage({ store, onBack }: SettingsPageProps) {
           </div>
 
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4">Slack Integration</h3>
-            <div>
-              <label className="text-white/60 text-sm block mb-2">Webhook URL (optional)</label>
-              <input
-                type="text"
-                placeholder="https://hooks.slack.com/services/..."
-                value={settings.slack_webhook_url || ''}
-                onChange={(e) => setSettings({ ...settings, slack_webhook_url: e.target.value })}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
-              />
-              <p className="text-white/40 text-xs mt-1">Receive profit alerts in Slack</p>
+            <h3 className="text-lg font-bold text-white mb-4">Slack & Discord</h3>
+            <p className="text-white/60 text-sm mb-4">Get profit alerts in your team chat</p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-white/60 text-sm block mb-2">Slack Webhook URL</label>
+                <input
+                  type="text"
+                  placeholder="https://hooks.slack.com/services/..."
+                  value={settings.slack_webhook_url || ''}
+                  onChange={(e) => setSettings({ ...settings, slack_webhook_url: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-white/60 text-sm block mb-2">Discord Webhook URL</label>
+                <input
+                  type="text"
+                  placeholder="https://discord.com/api/webhooks/..."
+                  value={settings.discord_webhook_url || ''}
+                  onChange={(e) => setSettings({ ...settings, discord_webhook_url: e.target.value })}
+                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
             </div>
           </div>
         </div>

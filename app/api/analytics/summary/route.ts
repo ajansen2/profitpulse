@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
 
   // Run all database queries in parallel for better performance
-  const [ordersResult, prevOrdersResult, monthOrdersResult, adSpendResult] = await Promise.all([
+  const [ordersResult, prevOrdersResult, monthOrdersResult, adSpendResult, expensesResult] = await Promise.all([
     // Get orders for period
     supabase
       .from('orders')
@@ -66,12 +66,19 @@ export async function GET(request: NextRequest) {
       .select('spend, platform')
       .eq('store_id', storeId)
       .gte('date', startDate.toISOString().split('T')[0]),
+
+    // Get recurring expenses
+    supabase
+      .from('expenses')
+      .select('name, amount, frequency, category')
+      .eq('store_id', storeId),
   ]);
 
   const { data: orders, error } = ordersResult;
   const { data: prevOrders } = prevOrdersResult;
   const { data: monthOrders } = monthOrdersResult;
   const { data: adSpend } = adSpendResult;
+  const { data: expenses } = expensesResult;
 
   if (error) {
     console.error('Analytics DB error:', error);
@@ -111,6 +118,22 @@ export async function GET(request: NextRequest) {
   const totalAdSpend = adSpend?.reduce((sum, a) => sum + (a.spend || 0), 0) || 0;
   const roas = totalAdSpend > 0 ? totalRevenue / totalAdSpend : 0;
   const profitAfterAds = totalNetProfit - totalAdSpend;
+
+  // Calculate recurring expenses prorated to the selected period
+  const getMonthlyAmount = (expense: { amount: number; frequency: string }) => {
+    switch (expense.frequency) {
+      case 'daily': return expense.amount * 30;
+      case 'weekly': return expense.amount * 4;
+      case 'monthly': return expense.amount;
+      case 'yearly': return expense.amount / 12;
+      default: return expense.amount;
+    }
+  };
+
+  const totalMonthlyExpenses = expenses?.reduce((sum, e) => sum + getMonthlyAmount(e), 0) || 0;
+  // Prorate to the selected period (e.g., 7 days = 7/30 of monthly)
+  const expensesForPeriod = (totalMonthlyExpenses / 30) * days;
+  const trueNetProfit = totalNetProfit - totalAdSpend - expensesForPeriod;
 
   // Calculate today's profit and this month's profit for goal tracking
   // (monthOrders already fetched in parallel above)
@@ -192,6 +215,10 @@ export async function GET(request: NextRequest) {
       totalAdSpend,
       roas,
       profitAfterAds,
+      // Expenses
+      totalMonthlyExpenses,
+      expensesForPeriod,
+      trueNetProfit,
     },
     comparison: {
       revenueChange,

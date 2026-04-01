@@ -163,6 +163,21 @@ CREATE TABLE IF NOT EXISTS ad_connections (
 );
 
 -- ============================================
+-- EXPENSES TABLE
+-- Recurring operating costs
+-- ============================================
+CREATE TABLE IF NOT EXISTS expenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  store_id UUID REFERENCES stores(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  frequency TEXT DEFAULT 'monthly', -- daily, weekly, monthly, yearly
+  category TEXT DEFAULT 'other', -- shopify, apps, marketing, shipping, other
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
 -- INSIGHTS TABLE
 -- AI-generated profit insights
 -- ============================================
@@ -194,6 +209,7 @@ CREATE INDEX IF NOT EXISTS idx_products_store_id ON products(store_id);
 CREATE INDEX IF NOT EXISTS idx_products_variant ON products(store_id, shopify_variant_id);
 CREATE INDEX IF NOT EXISTS idx_ad_spend_store_date ON ad_spend(store_id, date);
 CREATE INDEX IF NOT EXISTS idx_insights_store_id ON insights(store_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_store_id ON expenses(store_id);
 
 -- ============================================
 -- ROW LEVEL SECURITY

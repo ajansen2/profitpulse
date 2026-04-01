@@ -227,6 +227,62 @@ export async function POST(request: NextRequest) {
 
           console.log('📧 Profit alert sent for order', order.name);
         }
+
+        // Send Slack notification
+        if (settings.slack_webhook_url) {
+          try {
+            const slackColor = netProfit < 0 ? '#dc2626' : '#f59e0b'; // red or amber
+            await fetch(settings.slack_webhook_url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                attachments: [{
+                  color: slackColor,
+                  title: `${netProfit < 0 ? '🚨' : '⚠️'} Low Profit Alert - Order #${order.order_number || order.name}`,
+                  fields: [
+                    { title: 'Order Total', value: `$${totalPrice.toFixed(2)}`, short: true },
+                    { title: 'Net Profit', value: `$${netProfit.toFixed(2)}`, short: true },
+                    { title: 'Margin', value: `${profitMargin.toFixed(1)}%`, short: true },
+                    { title: 'Product', value: lineItemsToInsert[0]?.title || 'Unknown', short: true },
+                  ],
+                  footer: 'ProfitPulse',
+                  ts: Math.floor(Date.now() / 1000),
+                }],
+              }),
+            });
+            console.log('💬 Slack alert sent for order', order.name);
+          } catch (slackError) {
+            console.error('❌ Failed to send Slack alert:', slackError);
+          }
+        }
+
+        // Send Discord notification
+        if (settings.discord_webhook_url) {
+          try {
+            const discordColor = netProfit < 0 ? 0xdc2626 : 0xf59e0b; // red or amber
+            await fetch(settings.discord_webhook_url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                embeds: [{
+                  title: `${netProfit < 0 ? '🚨' : '⚠️'} Low Profit Alert - Order #${order.order_number || order.name}`,
+                  color: discordColor,
+                  fields: [
+                    { name: 'Order Total', value: `$${totalPrice.toFixed(2)}`, inline: true },
+                    { name: 'Net Profit', value: `$${netProfit.toFixed(2)}`, inline: true },
+                    { name: 'Margin', value: `${profitMargin.toFixed(1)}%`, inline: true },
+                    { name: 'Product', value: lineItemsToInsert[0]?.title || 'Unknown', inline: false },
+                  ],
+                  footer: { text: 'ProfitPulse' },
+                  timestamp: new Date().toISOString(),
+                }],
+              }),
+            });
+            console.log('💬 Discord alert sent for order', order.name);
+          } catch (discordError) {
+            console.error('❌ Failed to send Discord alert:', discordError);
+          }
+        }
       } catch (alertError) {
         console.error('❌ Failed to send profit alert:', alertError);
         // Don't fail the webhook - alert is non-critical

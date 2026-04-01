@@ -47,6 +47,10 @@ interface Summary {
   totalAdSpend: number;
   roas: number;
   profitAfterAds: number;
+  // Expenses
+  totalMonthlyExpenses: number;
+  expensesForPeriod: number;
+  trueNetProfit: number;
 }
 
 interface ChartData {
@@ -123,6 +127,8 @@ export default function Dashboard({ store }: { store: Store }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [profitGoals, setProfitGoals] = useState<{ daily: number | null; monthly: number | null }>({ daily: null, monthly: null });
+  const [syncingOrders, setSyncingOrders] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<string | null>(null);
 
   // Profit goals are loaded together with analytics to reduce API calls
   // (see loadAnalytics below)
@@ -166,6 +172,64 @@ export default function Dashboard({ store }: { store: Store }) {
       setShowOnboarding(true);
     }
     checkOnboarding();
+  }, [store, loading, analytics]);
+
+  // Auto-sync historical orders on first load if no orders exist
+  useEffect(() => {
+    async function autoSyncOrders() {
+      if (!store || loading || !analytics) return;
+
+      // Check if already synced (localStorage flag)
+      const alreadySynced = localStorage.getItem(`profitpulse_initial_sync_${store.id}`);
+      if (alreadySynced === 'true') return;
+
+      // Only sync if user has 0 orders (new install)
+      if (analytics.summary.totalOrders === 0 && analytics.recentOrders.length === 0) {
+        setSyncingOrders(true);
+        setSyncProgress('Syncing your historical orders from Shopify...');
+
+        try {
+          // Sync products first
+          setSyncProgress('Syncing products...');
+          await fetch('/api/products/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ store_id: store.id }),
+          });
+
+          // Then sync orders
+          setSyncProgress('Syncing orders (this may take a moment)...');
+          const orderRes = await fetch('/api/orders/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ store_id: store.id }),
+          });
+
+          const orderData = await orderRes.json();
+
+          if (orderData.success) {
+            setSyncProgress(`Synced ${orderData.synced} orders! Refreshing...`);
+            // Mark as synced
+            localStorage.setItem(`profitpulse_initial_sync_${store.id}`, 'true');
+            // Reload analytics
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          } else {
+            setSyncProgress(null);
+            setSyncingOrders(false);
+          }
+        } catch (err) {
+          console.error('Auto-sync error:', err);
+          setSyncProgress(null);
+          setSyncingOrders(false);
+        }
+      } else {
+        // User has orders, mark as synced
+        localStorage.setItem(`profitpulse_initial_sync_${store.id}`, 'true');
+      }
+    }
+    autoSyncOrders();
   }, [store, loading, analytics]);
 
   const completeOnboarding = async () => {
@@ -318,6 +382,27 @@ export default function Dashboard({ store }: { store: Store }) {
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-solid border-emerald-500 border-r-transparent mb-4"></div>
           <div className="text-white text-xl">Loading your profit data...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Syncing orders overlay
+  if (syncingOrders) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-center max-w-md px-6">
+          <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-emerald-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Setting up your dashboard</h2>
+          <p className="text-white/60 mb-4">{syncProgress}</p>
+          <div className="w-full bg-white/10 rounded-full h-2">
+            <div className="bg-emerald-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+          </div>
+          <p className="text-white/40 text-sm mt-4">This only happens once. We&apos;re importing your last 90 days of orders.</p>
         </div>
       </div>
     );
@@ -787,6 +872,60 @@ export default function Dashboard({ store }: { store: Store }) {
             </div>
           </div>
 
+          {/* True Net Profit - After ALL Costs */}
+          {(summary.totalAdSpend > 0 || summary.expensesForPeriod > 0) && (
+            <div className="bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-red-500/10 border border-purple-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">True Net Profit</h2>
+                    <p className="text-white/60 text-sm">After COGS, fees, ads & operating expenses</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className={`text-3xl font-bold ${summary.trueNetProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {formatCurrency(summary.trueNetProfit)}
+                  </div>
+                  <div className="text-white/40 text-sm">
+                    {summary.totalRevenue > 0 ? formatPercent((summary.trueNetProfit / summary.totalRevenue) * 100) : '0%'} true margin
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-white/10">
+                <div className="text-center">
+                  <div className="text-white/60 text-xs mb-1">Order Profit</div>
+                  <div className="text-white font-medium">{formatCurrency(summary.totalNetProfit)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-white/60 text-xs mb-1">Ad Spend</div>
+                  <div className="text-red-400 font-medium">-{formatCurrency(summary.totalAdSpend)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-white/60 text-xs mb-1">Expenses ({dateRange.days}d)</div>
+                  <div className="text-red-400 font-medium">-{formatCurrency(summary.expensesForPeriod)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-white/60 text-xs mb-1">Monthly Expenses</div>
+                  <div className="text-white/60 font-medium">{formatCurrency(summary.totalMonthlyExpenses)}/mo</div>
+                </div>
+              </div>
+              <button
+                onClick={() => navigateTo('settings')}
+                className="mt-4 text-purple-400 hover:text-purple-300 text-sm font-medium transition flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Manage Expenses & Ad Spend
+              </button>
+            </div>
+          )}
+
           {/* Profit Goals Progress */}
           {(() => {
             const hasGoals = (profitGoals.daily && profitGoals.daily > 0) || (profitGoals.monthly && profitGoals.monthly > 0);
@@ -1042,7 +1181,10 @@ export default function Dashboard({ store }: { store: Store }) {
             {/* Top Products by Profit */}
             <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold text-white">Top Products by Profit</h2>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Product Profitability</h2>
+                  <p className="text-white/40 text-sm">Top performers vs losers</p>
+                </div>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => exportToCSV('products')}
@@ -1061,34 +1203,89 @@ export default function Dashboard({ store }: { store: Store }) {
                   </button>
                 </div>
               </div>
-              <div className="space-y-3">
-                {(topProducts || []).slice(0, 5).map((product, i) => {
-                  const margin = product.margin || (product.revenue > 0 ? (product.profit / product.revenue) * 100 : 0);
-                  const marginColor = margin >= 30 ? 'text-emerald-400' : margin >= 15 ? 'text-amber-400' : 'text-red-400';
-                  return (
-                    <div key={i} className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium truncate">{product.title}</p>
-                        <p className="text-white/40 text-sm">{product.quantity} sold • {formatCurrency(product.revenue)} rev</p>
+              {(() => {
+                const totalProfit = topProducts.reduce((sum, p) => sum + p.profit, 0);
+                const profitableProducts = topProducts.filter(p => p.profit > 0).slice(0, 5);
+                const losingProducts = topProducts.filter(p => p.profit < 0).slice(0, 3);
+
+                return (
+                  <div className="space-y-4">
+                    {/* Top Performers */}
+                    {profitableProducts.length > 0 && (
+                      <div>
+                        <div className="text-emerald-400/60 text-xs font-medium mb-2 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
+                          </svg>
+                          TOP PERFORMERS
+                        </div>
+                        <div className="space-y-2">
+                          {profitableProducts.map((product, i) => {
+                            const margin = product.margin || (product.revenue > 0 ? (product.profit / product.revenue) * 100 : 0);
+                            const contribution = totalProfit > 0 ? (product.profit / totalProfit) * 100 : 0;
+                            return (
+                              <div key={i} className="flex items-center gap-3 py-2 px-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                                <div className="w-6 h-6 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                                  <span className="text-emerald-400 text-xs font-bold">#{i + 1}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white font-medium truncate text-sm">{product.title}</p>
+                                  <p className="text-white/40 text-xs">{product.quantity} sold · {contribution.toFixed(0)}% of profit</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-emerald-400 font-bold text-sm">{formatCurrency(product.profit)}</p>
+                                  <p className="text-emerald-400/60 text-xs">{formatPercent(margin)}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="text-right ml-4">
-                        <p className={`font-bold ${product.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {formatCurrency(product.profit)}
-                        </p>
-                        <p className={`text-sm ${marginColor}`}>
-                          {formatPercent(margin)} margin
-                        </p>
+                    )}
+
+                    {/* Losing Products */}
+                    {losingProducts.length > 0 && (
+                      <div>
+                        <div className="text-red-400/60 text-xs font-medium mb-2 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M12 13a1 1 0 100 2h5a1 1 0 001-1V9a1 1 0 10-2 0v2.586l-4.293-4.293a1 1 0 00-1.414 0L8 9.586 3.707 5.293a1 1 0 00-1.414 1.414l5 5a1 1 0 001.414 0L11 9.414 14.586 13H12z" clipRule="evenodd" />
+                          </svg>
+                          LOSING MONEY
+                        </div>
+                        <div className="space-y-2">
+                          {losingProducts.map((product, i) => {
+                            const margin = product.margin || (product.revenue > 0 ? (product.profit / product.revenue) * 100 : 0);
+                            return (
+                              <div key={i} className="flex items-center gap-3 py-2 px-3 bg-red-500/5 border border-red-500/20 rounded-lg">
+                                <div className="w-6 h-6 bg-red-500/20 rounded-full flex items-center justify-center">
+                                  <svg className="w-3 h-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white font-medium truncate text-sm">{product.title}</p>
+                                  <p className="text-white/40 text-xs">{product.quantity} sold · Check your COGS</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-red-400 font-bold text-sm">{formatCurrency(product.profit)}</p>
+                                  <p className="text-red-400/60 text-xs">{formatPercent(margin)}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {(!topProducts || topProducts.length === 0) && (
-                  <div className="text-center py-8">
-                    <p className="text-white/40">No product data yet</p>
-                    <p className="text-white/30 text-sm mt-1">Set your COGS to see product profitability</p>
+                    )}
+
+                    {topProducts.length === 0 && (
+                      <div className="text-center py-8">
+                        <p className="text-white/40">No product data yet</p>
+                        <p className="text-white/30 text-sm mt-1">Set your COGS to see product profitability</p>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
           </div>
 

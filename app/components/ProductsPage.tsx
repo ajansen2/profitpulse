@@ -237,18 +237,41 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
       }
 
       try {
-        await fetch('/api/products/import-csv', {
+        const res = await fetch('/api/products/import-csv', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ store_id: store.id, updates })
         });
+        const data = await res.json();
         await loadProducts();
         setShowImportModal(false);
+        if (data.updated > 0) {
+          showSuccess(`Imported! ${data.updated} products updated${data.notFound > 0 ? `, ${data.notFound} SKUs not found` : ''}`);
+        } else {
+          showError('No products updated. Make sure SKUs match your products.');
+        }
       } catch (err) {
         console.error('Error importing CSV:', err);
+        showError('Failed to import CSV');
       }
     };
     reader.readAsText(file);
+  };
+
+  const downloadCSVTemplate = () => {
+    // Generate CSV with current products
+    const csvContent = 'sku,cost\n' + products
+      .filter(p => p.sku)
+      .map(p => `${p.sku},${p.cost_per_item || 0}`)
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'profitpulse-cogs-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const filteredProducts = products
@@ -578,7 +601,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-white/20 rounded-xl p-6 max-w-md w-full">
             <h3 className="text-xl font-bold text-white mb-4">Import COGS from CSV</h3>
-            <p className="text-white/60 mb-6">Upload a CSV with SKU and cost columns.</p>
+            <p className="text-white/60 mb-6">Upload a CSV with SKU and cost columns to bulk update your product costs.</p>
 
             <div className="bg-white/5 border border-white/10 rounded-lg p-4 mb-4">
               <p className="text-white/60 text-sm mb-2">CSV Format:</p>
@@ -588,6 +611,16 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
                 DEF456,8.99
               </code>
             </div>
+
+            <button
+              onClick={downloadCSVTemplate}
+              className="w-full mb-4 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/20 text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download Template (with your SKUs)
+            </button>
 
             <input
               ref={fileInputRef}
@@ -608,7 +641,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
                 onClick={() => fileInputRef.current?.click()}
                 className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition"
               >
-                Choose File
+                Upload CSV
               </button>
             </div>
           </div>
