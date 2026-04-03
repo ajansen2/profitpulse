@@ -215,6 +215,34 @@ export default function Dashboard({ store }: { store: Store }) {
     return trialDays <= 0;
   };
 
+  // Try to refresh token using App Bridge session token
+  const tryRefreshToken = async (): Promise<boolean> => {
+    try {
+      // Check if we're in a Shopify embedded context
+      if (typeof window !== 'undefined' && (window as any).shopify) {
+        const shopify = (window as any).shopify;
+        // Get session token from App Bridge
+        const sessionToken = await shopify.idToken();
+        if (sessionToken) {
+          console.log('🔄 Got session token, attempting token exchange...');
+          const response = await fetch('/api/auth/shopify/token-from-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shop: store.shop_domain, session_token: sessionToken })
+          });
+          const data = await response.json();
+          if (data.success) {
+            console.log('✅ Token refreshed successfully');
+            return true;
+          }
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Token refresh failed:', error);
+    }
+    return false;
+  };
+
   // Handle subscribe button click
   const handleSubscribe = async () => {
     if (!store) return;
@@ -232,7 +260,22 @@ export default function Dashboard({ store }: { store: Store }) {
         // Already subscribed - reload to update UI
         window.location.reload();
       } else if (data.needsOAuth) {
-        // Redirect to OAuth if token is invalid
+        // Try to refresh token using App Bridge first
+        const refreshed = await tryRefreshToken();
+        if (refreshed) {
+          // Token refreshed - retry billing
+          const retryResponse = await fetch('/api/billing/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
+          });
+          const retryData = await retryResponse.json();
+          if (retryData.confirmationUrl) {
+            window.open(retryData.confirmationUrl, '_top');
+            return;
+          }
+        }
+        // Fallback to OAuth redirect
         window.open(`/api/auth/shopify/install?shop=${store.shop_domain}`, '_top');
       }
     } catch (error) {
@@ -1057,7 +1100,24 @@ export default function Dashboard({ store }: { store: Store }) {
                       console.log('Already active - reloading');
                       window.location.reload();
                     } else if (data.needsOAuth) {
-                      console.log('Needs OAuth - redirecting to install');
+                      console.log('Needs OAuth - trying token refresh first');
+                      // Try to refresh token using App Bridge
+                      const refreshed = await tryRefreshToken();
+                      if (refreshed) {
+                        console.log('Token refreshed - retrying billing');
+                        const retryResponse = await fetch('/api/billing/create', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
+                        });
+                        const retryData = await retryResponse.json();
+                        console.log('Retry response:', retryData);
+                        if (retryData.confirmationUrl) {
+                          window.open(retryData.confirmationUrl, '_top');
+                          return;
+                        }
+                      }
+                      console.log('Falling back to OAuth redirect');
                       window.open(`/api/auth/shopify/install?shop=${store.shop_domain}`, '_top');
                     } else {
                       console.log('Unknown response - no action taken');
