@@ -22,27 +22,18 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Check if we already have a valid token
+    // Get store record
     const { data: store } = await supabase
       .from('stores')
       .select('id, access_token')
       .eq('shop_domain', shop)
       .single();
 
-    if (store?.access_token && store.access_token.length > 10 && store.access_token !== 'revoked') {
-      console.log('✅ Store already has valid token');
-      return NextResponse.json({
-        success: true,
-        message: 'Already has valid token',
-        store_id: store.id
-      });
-    }
-
-    // For managed install apps, we need to use token exchange
-    // The session token can be exchanged for an access token
     const clientId = process.env.SHOPIFY_API_KEY;
     const clientSecret = process.env.SHOPIFY_API_SECRET;
 
+    // ALWAYS try token exchange when session_token is provided
+    // This ensures we get a fresh token even if the stored one looks valid but is actually revoked
     if (session_token) {
       // Try token exchange with session token
       const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
