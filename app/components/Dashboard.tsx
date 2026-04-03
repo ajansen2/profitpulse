@@ -2560,7 +2560,7 @@ export default function Dashboard({ store }: { store: Store }) {
                             });
                             const result = await res.json();
                             if (res.ok) {
-                              alert(`Synced ${result.synced} product variants!`);
+                              alert(`Synced ${result.synced} variants!\n\nShopify products: ${result.shopifyProducts}\nDB products: ${result.dbProducts}\nNot found in DB: ${result.notFound}`);
                               // Refresh the forecast after sync
                               const forecastRes = await fetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
                               const data = await forecastRes.json();

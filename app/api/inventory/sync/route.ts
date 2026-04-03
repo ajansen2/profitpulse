@@ -47,27 +47,56 @@ export async function POST(request: NextRequest) {
 
     const { products } = await response.json();
 
+    console.log('[Inventory Sync] Fetched products from Shopify:', products?.length || 0);
+
+    // Get existing products in our DB to see what variant IDs we have
+    const { data: dbProducts } = await supabase
+      .from('products')
+      .select('shopify_variant_id, title')
+      .eq('store_id', store_id);
+
+    console.log('[Inventory Sync] Products in DB:', dbProducts?.length || 0);
+    console.log('[Inventory Sync] DB variant IDs:', dbProducts?.map(p => p.shopify_variant_id).slice(0, 10));
+
     let synced = 0;
+    let notFound = 0;
+    const shopifyVariantIds: string[] = [];
 
     // Update inventory for each product variant
     for (const product of products || []) {
       for (const variant of product.variants || []) {
         const inventoryQuantity = variant.inventory_quantity || 0;
+        const variantId = String(variant.id);
+        shopifyVariantIds.push(variantId);
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('products')
           .update({
             inventory_quantity: inventoryQuantity,
             inventory_updated_at: new Date().toISOString(),
           })
           .eq('store_id', store_id)
-          .eq('shopify_variant_id', String(variant.id));
+          .eq('shopify_variant_id', variantId)
+          .select();
 
-        if (!error) synced++;
+        if (data && data.length > 0) {
+          synced++;
+        } else {
+          notFound++;
+        }
       }
     }
 
-    return NextResponse.json({ success: true, synced });
+    console.log('[Inventory Sync] Shopify variant IDs (first 10):', shopifyVariantIds.slice(0, 10));
+    console.log('[Inventory Sync] Synced:', synced, 'Not found in DB:', notFound);
+
+    return NextResponse.json({
+      success: true,
+      synced,
+      notFound,
+      shopifyProducts: products?.length || 0,
+      dbProducts: dbProducts?.length || 0,
+    });
   } catch (error) {
     console.error('Inventory sync error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
