@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getDailyDigestEmail, DailyDigestData } from '@/lib/email-templates';
+import { sendSMS, formatDailyDigestSMS } from '@/lib/twilio';
+import { sendSlackDailyDigest, sendDiscordDailyDigest } from '@/lib/webhooks';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -37,14 +39,20 @@ export async function GET(request: NextRequest) {
 
   for (const store of stores) {
     try {
-      // Check if store has daily digest enabled
+      // Check if store has any daily digest enabled (email, SMS, Slack, or Discord)
       const { data: settings } = await supabase
         .from('store_settings')
-        .select('email_daily_digest')
+        .select('email_daily_digest, sms_enabled, sms_phone_number, sms_daily_digest, slack_webhook_url, discord_webhook_url')
         .eq('store_id', store.id)
         .single();
 
-      if (!settings?.email_daily_digest) continue;
+      // Skip if no daily digest channels are enabled
+      const hasEmailDigest = settings?.email_daily_digest;
+      const hasSMSDigest = settings?.sms_enabled && settings?.sms_daily_digest && settings?.sms_phone_number;
+      const hasSlackDigest = !!settings?.slack_webhook_url;
+      const hasDiscordDigest = !!settings?.discord_webhook_url;
+
+      if (!hasEmailDigest && !hasSMSDigest && !hasSlackDigest && !hasDiscordDigest) continue;
 
       // Get yesterday's data
       const yesterday = new Date();
@@ -121,7 +129,7 @@ export async function GET(request: NextRequest) {
       const { subject, html } = getDailyDigestEmail(emailData);
 
       // Send email
-      if (store.email) {
+      if (hasEmailDigest && store.email) {
         await resend.emails.send({
           from: 'ProfitPulse <noreply@send.argora.ai>',
           to: store.email,
@@ -129,6 +137,68 @@ export async function GET(request: NextRequest) {
           html,
         });
         sent++;
+        console.log('📧 Daily digest email sent to', store.store_name);
+      }
+
+      // Send SMS daily digest
+      if (hasSMSDigest && settings.sms_phone_number) {
+        try {
+          const topProduct = topProducts.length > 0 ? topProducts[0] : undefined;
+          const smsBody = formatDailyDigestSMS({
+            storeName: store.store_name,
+            date: yesterday.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            orderCount: totalOrders,
+            revenue: totalRevenue,
+            profit: totalProfit,
+            margin: profitMargin,
+            prevOrderCount: prevOrders?.length || 0,
+            prevProfit,
+            topProduct: topProduct?.title,
+            topProductProfit: topProduct?.profit,
+          });
+          await sendSMS(settings.sms_phone_number, smsBody);
+          console.log('📱 Daily digest SMS sent to', store.store_name);
+        } catch (smsError) {
+          console.error('❌ SMS daily digest error:', smsError);
+        }
+      }
+
+      // Send Slack daily digest
+      if (hasSlackDigest && settings.slack_webhook_url) {
+        try {
+          await sendSlackDailyDigest(settings.slack_webhook_url, {
+            storeName: store.store_name,
+            date: emailData.date,
+            orderCount: totalOrders,
+            revenue: totalRevenue,
+            profit: totalProfit,
+            margin: profitMargin,
+            prevOrderCount: prevOrders?.length || 0,
+            prevProfit,
+            topProducts,
+          });
+        } catch (slackError) {
+          console.error('❌ Slack daily digest error:', slackError);
+        }
+      }
+
+      // Send Discord daily digest
+      if (hasDiscordDigest && settings.discord_webhook_url) {
+        try {
+          await sendDiscordDailyDigest(settings.discord_webhook_url, {
+            storeName: store.store_name,
+            date: emailData.date,
+            orderCount: totalOrders,
+            revenue: totalRevenue,
+            profit: totalProfit,
+            margin: profitMargin,
+            prevOrderCount: prevOrders?.length || 0,
+            prevProfit,
+            topProducts,
+          });
+        } catch (discordError) {
+          console.error('❌ Discord daily digest error:', discordError);
+        }
       }
     } catch (error) {
       console.error(`Error sending daily digest to ${store.store_name}:`, error);

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getWeeklySummaryEmail, WeeklySummaryData } from '@/lib/email-templates';
 import { sendSMS } from '@/lib/twilio';
+import { sendSlackWeeklyDigest, sendDiscordWeeklyDigest } from '@/lib/webhooks';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -38,17 +39,19 @@ export async function GET(request: NextRequest) {
 
   for (const store of stores) {
     try {
-      // Check if store has weekly summary enabled (email or SMS)
+      // Check if store has weekly summary enabled (email, SMS, Slack, or Discord)
       const { data: settings } = await supabase
         .from('store_settings')
-        .select('email_weekly_summary, sms_enabled, sms_weekly_digest, sms_phone_number')
+        .select('email_weekly_summary, sms_enabled, sms_weekly_digest, sms_phone_number, slack_webhook_url, discord_webhook_url')
         .eq('store_id', store.id)
         .single();
 
       const emailEnabled = settings?.email_weekly_summary;
       const smsEnabled = settings?.sms_enabled && settings?.sms_weekly_digest && settings?.sms_phone_number;
+      const slackEnabled = !!settings?.slack_webhook_url;
+      const discordEnabled = !!settings?.discord_webhook_url;
 
-      if (!emailEnabled && !smsEnabled) continue;
+      if (!emailEnabled && !smsEnabled && !slackEnabled && !discordEnabled) continue;
 
       // Get last week's data (Monday to Sunday)
       const today = new Date();
@@ -194,6 +197,57 @@ Margin: ${profitMargin.toFixed(1)}%`;
           console.log('📱 Weekly SMS sent for', store.store_name);
         } catch (smsErr) {
           console.error('❌ Weekly SMS error:', smsErr);
+        }
+      }
+
+      // Find best day of the week
+      const bestDay = dailyBreakdown.length > 0
+        ? dailyBreakdown.reduce((best, day) => day.profit > best.profit ? day : best, dailyBreakdown[0])
+        : undefined;
+
+      // Send Slack weekly digest
+      if (slackEnabled && settings?.slack_webhook_url) {
+        try {
+          await sendSlackWeeklyDigest(settings.slack_webhook_url, {
+            storeName: store.store_name,
+            weekRange: `${emailData.weekStart} - ${emailData.weekEnd}`,
+            orderCount: totalOrders,
+            revenue: totalRevenue,
+            profit: totalProfit,
+            margin: profitMargin,
+            prevOrderCount: prevOrders?.length || 0,
+            prevProfit,
+            topProducts,
+            bestDay: bestDay ? {
+              date: new Date(bestDay.date).toLocaleDateString('en-US', { weekday: 'short' }),
+              profit: bestDay.profit,
+            } : undefined,
+          });
+        } catch (slackErr) {
+          console.error('❌ Slack weekly digest error:', slackErr);
+        }
+      }
+
+      // Send Discord weekly digest
+      if (discordEnabled && settings?.discord_webhook_url) {
+        try {
+          await sendDiscordWeeklyDigest(settings.discord_webhook_url, {
+            storeName: store.store_name,
+            weekRange: `${emailData.weekStart} - ${emailData.weekEnd}`,
+            orderCount: totalOrders,
+            revenue: totalRevenue,
+            profit: totalProfit,
+            margin: profitMargin,
+            prevOrderCount: prevOrders?.length || 0,
+            prevProfit,
+            topProducts,
+            bestDay: bestDay ? {
+              date: new Date(bestDay.date).toLocaleDateString('en-US', { weekday: 'short' }),
+              profit: bestDay.profit,
+            } : undefined,
+          });
+        } catch (discordErr) {
+          console.error('❌ Discord weekly digest error:', discordErr);
         }
       }
     } catch (error) {

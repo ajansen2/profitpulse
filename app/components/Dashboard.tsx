@@ -157,11 +157,14 @@ export default function Dashboard({ store }: { store: Store }) {
   const [loading, setLoading] = useState(true);
   const [dateRangeOption, setDateRangeOption] = useState<DateRangeOption>('30d');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState('dashboard');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [profitGoals, setProfitGoals] = useState<{ daily: number | null; monthly: number | null }>({ daily: null, monthly: null });
+  const [showBillingRequired, setShowBillingRequired] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
   const [dashboardWidgets, setDashboardWidgets] = useState({
     keyMetrics: true,
     trueNetProfit: true,
@@ -202,6 +205,47 @@ export default function Dashboard({ store }: { store: Store }) {
     const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return Math.max(0, daysLeft);
   };
+
+  // Check if subscription is required (trial expired and not active)
+  const isSubscriptionRequired = () => {
+    if (!store) return false;
+    if (store.subscription_status === 'active') return false;
+    const trialDays = getTrialDaysLeft();
+    if (trialDays === null) return true;
+    return trialDays <= 0;
+  };
+
+  // Handle subscribe button click
+  const handleSubscribe = async () => {
+    if (!store) return;
+    setSubscribing(true);
+    try {
+      const response = await fetch('/api/billing/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop: store.shop_domain })
+      });
+      const data = await response.json();
+      if (data.confirmationUrl) {
+        window.open(data.confirmationUrl, '_top');
+      } else if (data.oauthUrl) {
+        window.open(data.oauthUrl, '_top');
+      }
+    } catch (error) {
+      console.error('Error creating billing charge:', error);
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  // Check subscription status after store loads
+  useEffect(() => {
+    if (store && !loading) {
+      if (isSubscriptionRequired()) {
+        setShowBillingRequired(true);
+      }
+    }
+  }, [store, loading]);
 
   // Show onboarding only ONCE for new users
   useEffect(() => {
@@ -492,41 +536,33 @@ export default function Dashboard({ store }: { store: Store }) {
 
   const { summary, comparison, chartData, topProducts, recentOrders } = analytics;
 
-  // CSV Export function
-  const exportToCSV = (type: 'orders' | 'products') => {
-    if (type === 'orders' && recentOrders.length > 0) {
-      const headers = ['Order Number', 'Date', 'Revenue', 'Profit', 'Margin'];
-      const rows = recentOrders.map(o => [
-        o.order_number,
-        new Date(o.created_at).toLocaleDateString(),
-        o.total_price.toFixed(2),
-        o.net_profit.toFixed(2),
-        o.profit_margin.toFixed(1) + '%'
-      ]);
-      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      downloadCSV(csv, 'orders-export.csv');
-    } else if (type === 'products' && topProducts.length > 0) {
-      const headers = ['Product', 'Revenue', 'Profit', 'Quantity', 'Margin'];
-      const rows = topProducts.map(p => [
-        `"${p.title}"`,
-        p.revenue.toFixed(2),
-        p.profit.toFixed(2),
-        p.quantity,
-        ((p.profit / p.revenue) * 100).toFixed(1) + '%'
-      ]);
-      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      downloadCSV(csv, 'products-export.csv');
-    }
-  };
+  // CSV Export function - uses the API for full data export
+  const exportToCSV = async (type: 'orders' | 'products' | 'analytics') => {
+    if (!store) return;
+    setShowExportMenu(false);
 
-  const downloadCSV = (csv: string, filename: string) => {
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const url = `/api/export?store_id=${store.id}&type=${type}&days=${dateRange.days}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        console.error('Export failed');
+        return;
+      }
+
+      const blob = await response.blob();
+      const filename = response.headers.get('Content-Disposition')?.split('filename="')[1]?.replace('"', '') ||
+        `${type}-export.csv`;
+
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Export error:', error);
+    }
   };
 
   // Format change indicator
@@ -538,6 +574,49 @@ export default function Dashboard({ store }: { store: Store }) {
       </span>
     );
   };
+
+  // Billing Required Paywall - blocks entire UI
+  if (showBillingRequired) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+        <div className="max-w-lg w-full">
+          <div className="bg-gradient-to-br from-emerald-500/20 to-green-500/20 border-2 border-emerald-500/50 rounded-2xl p-8 text-center">
+            <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-3xl font-bold text-white mb-3">Trial Ended</h2>
+            <p className="text-white/70 mb-6 text-lg">
+              Your 7-day free trial has expired. Subscribe to ProfitPulse to continue tracking your real profits.
+            </p>
+            <div className="bg-zinc-900/50 rounded-xl p-4 mb-6">
+              <div className="text-white/60 text-sm mb-1">ProfitPulse Pro</div>
+              <div className="text-3xl font-bold text-white">$29.99<span className="text-lg font-normal text-white/60">/month</span></div>
+              <div className="text-emerald-400 text-sm mt-1">Full profit analytics & AI insights</div>
+            </div>
+            <button
+              onClick={handleSubscribe}
+              disabled={subscribing}
+              className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg transition"
+            >
+              {subscribing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Processing...
+                </span>
+              ) : (
+                'Subscribe Now'
+              )}
+            </button>
+            <p className="text-white/40 text-sm mt-4">
+              Secure payment through Shopify. Cancel anytime.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -835,6 +914,61 @@ export default function Dashboard({ store }: { store: Store }) {
                 }
                 return null;
               })()}
+
+              {/* Export Button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-white text-sm font-medium transition"
+                  title="Export Data"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Export
+                  <svg className={`w-4 h-4 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showExportMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                    <div className="absolute right-0 mt-2 w-56 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                      <div className="p-2">
+                        <div className="px-3 py-2 text-xs font-medium text-zinc-400 uppercase">Export to CSV</div>
+                        <button
+                          onClick={() => exportToCSV('orders')}
+                          className="w-full text-left px-4 py-2 rounded-lg text-sm text-white/80 hover:bg-zinc-700 flex items-center gap-2 transition"
+                        >
+                          <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          Orders ({dateRange.label})
+                        </button>
+                        <button
+                          onClick={() => exportToCSV('products')}
+                          className="w-full text-left px-4 py-2 rounded-lg text-sm text-white/80 hover:bg-zinc-700 flex items-center gap-2 transition"
+                        >
+                          <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                          </svg>
+                          All Products
+                        </button>
+                        <button
+                          onClick={() => exportToCSV('analytics')}
+                          className="w-full text-left px-4 py-2 rounded-lg text-sm text-white/80 hover:bg-zinc-700 flex items-center gap-2 transition"
+                        >
+                          <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          Daily Analytics ({dateRange.label})
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
 
               {/* Date Range Picker */}
               <div className="relative">
