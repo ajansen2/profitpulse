@@ -2553,15 +2553,24 @@ export default function Dashboard({ store }: { store: Store }) {
                       <button
                         onClick={async () => {
                           try {
-                            const res = await fetch(`/api/inventory/sync?store_id=${store.id}`, { method: 'POST' });
+                            const res = await fetch('/api/inventory/sync', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ store_id: store.id }),
+                            });
+                            const result = await res.json();
                             if (res.ok) {
+                              alert(`Synced ${result.synced} product variants!`);
                               // Refresh the forecast after sync
                               const forecastRes = await fetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
                               const data = await forecastRes.json();
                               setInventoryForecast(data);
+                            } else {
+                              alert(`Sync failed: ${result.error || 'Unknown error'}`);
                             }
                           } catch (err) {
                             console.error('Failed to sync inventory:', err);
+                            alert('Failed to sync inventory');
                           }
                         }}
                         className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-sm rounded-lg transition"

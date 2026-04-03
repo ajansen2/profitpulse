@@ -21,17 +21,17 @@ export async function GET(request: NextRequest) {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - 30);
 
-  // Get products with inventory
+  // Get products with inventory (stored per variant)
   const { data: products } = await supabase
     .from('products')
-    .select('shopify_product_id, title, price, cost_per_item, inventory_quantity')
+    .select('shopify_product_id, shopify_variant_id, title, price, cost_per_item, inventory_quantity')
     .eq('store_id', storeId);
 
-  // Get sales data
+  // Get sales data by variant
   const { data: lineItems } = await supabase
     .from('order_line_items')
     .select(`
-      shopify_product_id,
+      shopify_variant_id,
       quantity,
       profit,
       orders!inner(order_created_at, store_id)
@@ -39,10 +39,10 @@ export async function GET(request: NextRequest) {
     .eq('orders.store_id', storeId)
     .gte('orders.order_created_at', startDate.toISOString());
 
-  // Calculate sales velocity per product
+  // Calculate sales velocity per variant
   const salesData: { [key: string]: { totalSold: number; totalProfit: number } } = {};
   for (const item of lineItems || []) {
-    const key = item.shopify_product_id;
+    const key = item.shopify_variant_id;
     if (!key) continue;
     if (!salesData[key]) {
       salesData[key] = { totalSold: 0, totalProfit: 0 };
@@ -53,11 +53,11 @@ export async function GET(request: NextRequest) {
 
   const daysInPeriod = 30;
 
-  // Build forecast for each product
+  // Build forecast for each product variant
   const forecasts = (products || [])
     .map(product => {
-      const productId = product.shopify_product_id;
-      const sales = salesData[productId] || { totalSold: 0, totalProfit: 0 };
+      const variantId = product.shopify_variant_id;
+      const sales = salesData[variantId] || { totalSold: 0, totalProfit: 0 };
 
       const dailyVelocity = sales.totalSold / daysInPeriod;
       const profitPerUnit = sales.totalSold > 0
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
       const additionalProfitPotential = additionalUnitsNeeded * profitPerUnit;
 
       return {
-        productId,
+        productId: variantId,
         title: product.title,
         currentPrice: product.price || 0,
         costPerItem: product.cost_per_item || 0,
