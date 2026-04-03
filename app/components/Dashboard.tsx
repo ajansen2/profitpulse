@@ -228,6 +228,9 @@ export default function Dashboard({ store }: { store: Store }) {
       const data = await response.json();
       if (data.confirmationUrl) {
         window.open(data.confirmationUrl, '_top');
+      } else if (data.status === 'active') {
+        // Already subscribed - reload to update UI
+        window.location.reload();
       } else if (data.needsOAuth) {
         // Redirect to OAuth if token is invalid
         window.open(`/api/auth/shopify/install?shop=${store.shop_domain}`, '_top');
@@ -1043,6 +1046,9 @@ export default function Dashboard({ store }: { store: Store }) {
                   const data = await response.json();
                   if (data.confirmationUrl) {
                     window.open(data.confirmationUrl, '_top');
+                  } else if (data.status === 'active') {
+                    // Already subscribed - reload to update UI
+                    window.location.reload();
                   }
                 }}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition"
