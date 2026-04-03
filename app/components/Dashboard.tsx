@@ -1038,17 +1038,31 @@ export default function Dashboard({ store }: { store: Store }) {
               </div>
               <button
                 onClick={async () => {
-                  const response = await fetch('/api/billing/create', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
-                  });
-                  const data = await response.json();
-                  if (data.confirmationUrl) {
-                    window.open(data.confirmationUrl, '_top');
-                  } else if (data.status === 'active') {
-                    // Already subscribed - reload to update UI
-                    window.location.reload();
+                  console.log('🔄 Upgrade button clicked');
+                  console.log('Store ID:', store.id);
+                  console.log('Shop domain:', store.shop_domain);
+                  try {
+                    const response = await fetch('/api/billing/create', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
+                    });
+                    console.log('Response status:', response.status);
+                    const data = await response.json();
+                    console.log('Response data:', data);
+                    if (data.confirmationUrl) {
+                      console.log('Redirecting to:', data.confirmationUrl);
+                      window.open(data.confirmationUrl, '_top');
+                    } else if (data.status === 'active') {
+                      console.log('Already active - reloading');
+                      window.location.reload();
+                    } else {
+                      console.log('Unknown response - no action taken');
+                      alert('Billing response: ' + JSON.stringify(data));
+                    }
+                  } catch (error) {
+                    console.error('Billing error:', error);
+                    alert('Error: ' + error);
                   }
                 }}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition"
