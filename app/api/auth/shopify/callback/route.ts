@@ -201,30 +201,50 @@ export async function GET(request: NextRequest) {
       console.log('⚠️ Webhook registration failed');
     }
 
-    // Check for existing billing charges first
-    console.log('💰 Checking existing billing charges...');
+    // Check for existing subscriptions using GraphQL (REST API is deprecated)
+    console.log('💰 Checking existing subscriptions via GraphQL...');
 
     const isTestStore = shop.includes('-test') || shop.includes('development') || shop.includes('dev-');
     const shopName = shop.replace('.myshopify.com', '');
     const clientId = process.env.SHOPIFY_API_KEY;
     const returnUrl = `${appUrl}/api/billing/callback?shop=${shop}&store_id=${store.id}`;
 
-    const existingChargesResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/recurring_application_charges.json`,
-      { headers: { 'X-Shopify-Access-Token': access_token } }
+    const existingResponse = await fetch(
+      `https://${shop}/admin/api/2024-01/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': access_token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            query {
+              currentAppInstallation {
+                activeSubscriptions {
+                  id
+                  name
+                  status
+                }
+              }
+            }
+          `,
+        }),
+      }
     );
 
-    if (existingChargesResponse.ok) {
-      const charges = await existingChargesResponse.json();
-      console.log('💰 Found charges:', charges.recurring_application_charges?.length || 0);
+    if (existingResponse.ok) {
+      const existingData = await existingResponse.json();
+      const activeSubscriptions = existingData.data?.currentAppInstallation?.activeSubscriptions || [];
+      console.log('💰 Found subscriptions:', activeSubscriptions.length);
 
       // Already has active subscription
-      const active = charges.recurring_application_charges?.find((c: any) => c.status === 'active');
+      const active = activeSubscriptions.find((s: any) => s.status === 'ACTIVE');
       if (active) {
-        console.log('✅ Found active charge, updating store and redirecting to app');
+        console.log('✅ Found active subscription, updating store and redirecting to app');
         await supabase
           .from('stores')
-          .update({ subscription_status: 'active', billing_charge_id: active.id.toString() })
+          .update({ subscription_status: 'active', billing_charge_id: active.id })
           .eq('id', store.id);
 
         const response = NextResponse.redirect(`https://admin.shopify.com/store/${shopName}/apps/${clientId}`);
@@ -232,45 +252,70 @@ export async function GET(request: NextRequest) {
         response.cookies.delete('shopify_oauth_shop');
         return response;
       }
-
-      // Has pending charge - redirect to it
-      const pending = charges.recurring_application_charges?.find((c: any) => c.status === 'pending');
-      if (pending) {
-        console.log('💰 Found pending charge, redirecting to confirmation');
-        const response = NextResponse.redirect(pending.confirmation_url);
-        response.cookies.delete('shopify_oauth_state');
-        response.cookies.delete('shopify_oauth_shop');
-        return response;
-      }
     }
 
-    // No active or pending charge - create new one
-    console.log('💰 Creating new billing charge...');
+    // No active subscription - create new one using GraphQL
+    console.log('💰 Creating subscription via GraphQL...');
 
-    const chargeResponse = await fetch(`https://${shop}/admin/api/2024-01/recurring_application_charges.json`, {
+    const chargeResponse = await fetch(`https://${shop}/admin/api/2024-01/graphql.json`, {
       method: 'POST',
       headers: {
         'X-Shopify-Access-Token': access_token,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        recurring_application_charge: {
+        query: `
+          mutation AppSubscriptionCreate($name: String!, $returnUrl: URL!, $trialDays: Int, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!) {
+            appSubscriptionCreate(
+              name: $name
+              returnUrl: $returnUrl
+              trialDays: $trialDays
+              test: $test
+              lineItems: $lineItems
+            ) {
+              appSubscription {
+                id
+                status
+              }
+              confirmationUrl
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `,
+        variables: {
           name: 'ProfitPulse Pro',
-          price: 29.99,
-          trial_days: 7,
-          return_url: returnUrl,
-          // IMPORTANT: Only include test flag for dev/test stores
-          ...(isTestStore && { test: true }),
-        }
-      })
+          returnUrl: returnUrl,
+          trialDays: 7,
+          test: isTestStore,
+          lineItems: [
+            {
+              plan: {
+                appRecurringPricingDetails: {
+                  price: { amount: 29.99, currencyCode: 'USD' },
+                  interval: 'EVERY_30_DAYS',
+                },
+              },
+            },
+          ],
+        },
+      }),
     });
 
-    if (chargeResponse.ok) {
-      const chargeData = await chargeResponse.json();
-      const confirmationUrl = chargeData.recurring_application_charge.confirmation_url;
-      console.log('✅ Billing charge created, redirecting to approval');
+    const chargeData = await chargeResponse.json();
+    console.log('💰 GraphQL billing response:', JSON.stringify(chargeData, null, 2));
 
-      // Clear OAuth cookies
+    const confirmationUrl = chargeData.data?.appSubscriptionCreate?.confirmationUrl;
+    const userErrors = chargeData.data?.appSubscriptionCreate?.userErrors;
+
+    if (userErrors && userErrors.length > 0) {
+      console.error('❌ Billing user errors:', userErrors);
+    }
+
+    if (confirmationUrl) {
+      console.log('✅ Subscription created, redirecting to approval');
       const response = NextResponse.redirect(confirmationUrl);
       response.cookies.delete('shopify_oauth_state');
       response.cookies.delete('shopify_oauth_shop');
@@ -278,7 +323,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Billing failed - redirect to app anyway
-    console.error('❌ Billing charge creation failed:', chargeResponse.status);
+    console.error('❌ Billing creation failed - no confirmation URL');
     const response = NextResponse.redirect(`https://admin.shopify.com/store/${shopName}/apps/${clientId}?billing_error=true`);
     response.cookies.delete('shopify_oauth_state');
     response.cookies.delete('shopify_oauth_shop');

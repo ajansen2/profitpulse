@@ -70,59 +70,10 @@ export async function POST(request: NextRequest) {
     const isTestStore = shop.includes('-test') || shop.includes('development') || shop.includes('dev-');
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://profitpulse.app';
 
-    // Check for existing charges
-    console.log('💰 [BILLING CREATE] Checking existing charges...');
+    // Check for existing subscriptions using GraphQL
+    console.log('💰 [BILLING CREATE] Checking existing subscriptions via GraphQL...');
     const existingResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/recurring_application_charges.json`,
-      { headers: { 'X-Shopify-Access-Token': accessToken } }
-    );
-    console.log('💰 [BILLING CREATE] Existing charges response:', existingResponse.status);
-
-    if (existingResponse.status === 401 || existingResponse.status === 403) {
-      const errorBody = await existingResponse.text();
-      console.log('❌ [BILLING CREATE] Auth error on billing API:', errorBody);
-      console.log('❌ [BILLING CREATE] But token worked for shop.json - this is a BILLING PERMISSION issue');
-      // Don't mark as revoked since token is valid, just billing API is blocked
-      return NextResponse.json({
-        error: `Billing API error: ${existingResponse.status} - App may not have billing enabled in Shopify Partner Dashboard`,
-        details: errorBody,
-        needsOAuth: false  // Token is valid, billing is the issue
-      }, { status: 403 });
-    }
-
-    if (existingResponse.ok) {
-      const charges = await existingResponse.json();
-      console.log('💰 [BILLING CREATE] Found charges:', charges.recurring_application_charges?.length || 0);
-
-      // Already has active subscription
-      const active = charges.recurring_application_charges?.find((c: any) => c.status === 'active');
-      if (active) {
-        console.log('✅ [BILLING CREATE] Found active charge');
-        await supabase
-          .from('stores')
-          .update({ subscription_status: 'active', billing_charge_id: active.id.toString() })
-          .eq('id', storeId);
-        return NextResponse.json({ status: 'active', message: 'Already subscribed' });
-      }
-
-      // Has pending charge
-      const pending = charges.recurring_application_charges?.find((c: any) => c.status === 'pending');
-      if (pending) {
-        console.log('💰 [BILLING CREATE] Found pending charge');
-        return NextResponse.json({
-          status: 'pending',
-          confirmationUrl: pending.confirmation_url
-        });
-      }
-    }
-
-    // Create new charge - return URL goes to billing callback to properly update subscription status
-    const returnUrl = `${appUrl}/api/billing/callback?shop=${shop}&store_id=${storeId}`;
-
-    console.log('💰 [BILLING CREATE] Creating new charge...');
-
-    const chargeResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/recurring_application_charges.json`,
+      `https://${shop}/admin/api/2024-01/graphql.json`,
       {
         method: 'POST',
         headers: {
@@ -130,38 +81,125 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          recurring_application_charge: {
+          query: `
+            query {
+              currentAppInstallation {
+                activeSubscriptions {
+                  id
+                  name
+                  status
+                }
+              }
+            }
+          `,
+        }),
+      }
+    );
+
+    if (existingResponse.ok) {
+      const existingData = await existingResponse.json();
+      const activeSubscriptions = existingData.data?.currentAppInstallation?.activeSubscriptions || [];
+      console.log('💰 [BILLING CREATE] Found subscriptions:', activeSubscriptions.length);
+
+      // Already has active subscription
+      const active = activeSubscriptions.find((s: any) => s.status === 'ACTIVE');
+      if (active) {
+        console.log('✅ [BILLING CREATE] Found active subscription');
+        await supabase
+          .from('stores')
+          .update({ subscription_status: 'active', billing_charge_id: active.id })
+          .eq('id', storeId);
+        return NextResponse.json({ status: 'active', message: 'Already subscribed' });
+      }
+    }
+
+    // Create new subscription using GraphQL (REST API is deprecated)
+    const returnUrl = `${appUrl}/api/billing/callback?shop=${shop}&store_id=${storeId}`;
+
+    console.log('💰 [BILLING CREATE] Creating subscription via GraphQL...');
+
+    const chargeResponse = await fetch(
+      `https://${shop}/admin/api/2024-01/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': accessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            mutation AppSubscriptionCreate($name: String!, $returnUrl: URL!, $trialDays: Int, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!) {
+              appSubscriptionCreate(
+                name: $name
+                returnUrl: $returnUrl
+                trialDays: $trialDays
+                test: $test
+                lineItems: $lineItems
+              ) {
+                appSubscription {
+                  id
+                  status
+                }
+                confirmationUrl
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+          `,
+          variables: {
             name: 'ProfitPulse Pro',
-            price: 29.99,
-            trial_days: 7,
-            return_url: returnUrl,
-            // Only include test flag for dev/test stores
-            ...(isTestStore && { test: true }),
+            returnUrl: returnUrl,
+            trialDays: 7,
+            test: isTestStore,
+            lineItems: [
+              {
+                plan: {
+                  appRecurringPricingDetails: {
+                    price: { amount: 29.99, currencyCode: 'USD' },
+                    interval: 'EVERY_30_DAYS',
+                  },
+                },
+              },
+            ],
           },
         }),
       }
     );
 
-    if (!chargeResponse.ok) {
-      const errorData = await chargeResponse.json().catch(() => null);
-      console.error('❌ [BILLING CREATE] Failed:', chargeResponse.status, errorData);
+    const chargeData = await chargeResponse.json();
+    console.log('💰 [BILLING CREATE] GraphQL response:', JSON.stringify(chargeData, null, 2));
 
-      if (chargeResponse.status === 401 || chargeResponse.status === 403) {
-        return NextResponse.json({
-          error: `Shopify API error: ${chargeResponse.status}`,
-          needsOAuth: true
-        }, { status: 401 });
-      }
-
+    // Check for GraphQL errors
+    if (chargeData.errors) {
+      console.error('❌ [BILLING CREATE] GraphQL errors:', chargeData.errors);
       return NextResponse.json({
-        error: 'Failed to create billing charge',
-        details: errorData
+        error: 'GraphQL error',
+        details: chargeData.errors
       }, { status: 500 });
     }
 
-    const chargeData = await chargeResponse.json();
-    const confirmationUrl = chargeData.recurring_application_charge.confirmation_url;
-    console.log('✅ [BILLING CREATE] Charge created');
+    // Check for user errors
+    const userErrors = chargeData.data?.appSubscriptionCreate?.userErrors;
+    if (userErrors && userErrors.length > 0) {
+      console.error('❌ [BILLING CREATE] User errors:', userErrors);
+      return NextResponse.json({
+        error: userErrors[0].message,
+        details: userErrors
+      }, { status: 400 });
+    }
+
+    const confirmationUrl = chargeData.data?.appSubscriptionCreate?.confirmationUrl;
+    if (!confirmationUrl) {
+      console.error('❌ [BILLING CREATE] No confirmation URL returned');
+      return NextResponse.json({
+        error: 'No confirmation URL returned',
+        details: chargeData
+      }, { status: 500 });
+    }
+
+    console.log('✅ [BILLING CREATE] Subscription created, confirmation URL received');
 
     return NextResponse.json({
       status: 'created',
