@@ -1034,14 +1034,16 @@ export default function Dashboard({ store }: { store: Store }) {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  fetch(`/api/billing/create?store_id=${store.id}`)
-                    .then(res => res.json())
-                    .then(data => {
-                      if (data.confirmation_url) {
-                        window.open(data.confirmation_url, '_top');
-                      }
-                    });
+                onClick={async () => {
+                  const response = await fetch('/api/billing/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
+                  });
+                  const data = await response.json();
+                  if (data.confirmationUrl) {
+                    window.open(data.confirmationUrl, '_top');
+                  }
                 }}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition"
               >
