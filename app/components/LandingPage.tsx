@@ -357,9 +357,11 @@ function Footer() {
     <footer className="border-t border-white/10 py-10 px-6">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-emerald-500 rounded flex items-center justify-center">
-            <span className="text-white font-bold text-sm">P</span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="ProfitPulse"
+            className="h-6 w-auto"
+          />
           <span className="text-white/60 text-sm">ProfitPulse</span>
         </div>
         <div className="flex items-center gap-6 text-sm text-white/40">

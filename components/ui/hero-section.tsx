@@ -267,9 +267,11 @@ const HeroHeader = () => {
 const Logo = () => {
   return (
     <div className="flex items-center gap-2">
-      <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
-        <span className="text-white font-bold text-lg">P</span>
-      </div>
+      <img
+        src="/logo.png"
+        alt="ProfitPulse"
+        className="h-8 w-auto"
+      />
       <span className="text-white font-bold text-xl">ProfitPulse</span>
     </div>
   );
