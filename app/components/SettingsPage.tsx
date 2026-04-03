@@ -28,6 +28,7 @@ interface DashboardWidgets {
   aiProfitCoach: boolean;
   costBreakdown: boolean;
   recentOrders: boolean;
+  customerLTV: boolean;
 }
 
 const DEFAULT_WIDGETS: DashboardWidgets = {
@@ -46,6 +47,7 @@ const DEFAULT_WIDGETS: DashboardWidgets = {
   aiProfitCoach: true,
   costBreakdown: true,
   recentOrders: true,
+  customerLTV: true,
 };
 
 interface StoreSettings {
@@ -73,7 +75,11 @@ interface StoreSettings {
   sms_enabled?: boolean;
   sms_phone_number?: string;
   sms_daily_digest?: boolean;
+  sms_weekly_digest?: boolean;
   sms_profit_alerts?: boolean;
+  // Low stock alerts
+  low_stock_alerts_enabled?: boolean;
+  low_stock_sms_enabled?: boolean;
   flow_triggers_enabled?: boolean;
 }
 
@@ -1479,6 +1485,26 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
 
                   <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
                     <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <span className="text-white font-medium">Weekly Digest SMS</span>
+                        <p className="text-white/40 text-sm">Full week summary every Monday</p>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.sms_weekly_digest || false}
+                      onChange={(e) => setSettings({ ...settings, sms_weekly_digest: e.target.checked })}
+                      className="w-5 h-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-emerald-500"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center">
                         <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1503,6 +1529,52 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Low Stock Alerts */}
+          <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Low Stock Alerts</h3>
+                <p className="text-white/60 text-sm">Get notified when profitable products run low</p>
+              </div>
+            </div>
+
+            <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg mb-3">
+              <div className="flex items-center gap-3">
+                <span className="text-white font-medium">Enable Low Stock Alerts</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.low_stock_alerts_enabled || false}
+                onChange={(e) => setSettings({ ...settings, low_stock_alerts_enabled: e.target.checked })}
+                className="w-5 h-5 rounded border-white/20 bg-white/10 text-amber-500 focus:ring-amber-500"
+              />
+            </label>
+
+            {settings.low_stock_alerts_enabled && settings.sms_enabled && (
+              <label className="flex items-center justify-between cursor-pointer p-3 bg-white/5 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <span className="text-white font-medium">SMS Low Stock Alerts</span>
+                  <span className="text-white/40 text-sm">Daily at 9am</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.low_stock_sms_enabled || false}
+                  onChange={(e) => setSettings({ ...settings, low_stock_sms_enabled: e.target.checked })}
+                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-amber-500 focus:ring-amber-500"
+                />
+              </label>
+            )}
+
+            <p className="text-white/40 text-xs mt-3">
+              Alerts you when high-profit items drop below 10 units. Requires syncing inventory from Shopify.
+            </p>
           </div>
 
           <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-6">
@@ -1833,6 +1905,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
                 { key: 'aiProfitCoach', label: 'AI Profit Coach', desc: 'AI-powered recommendations' },
                 { key: 'costBreakdown', label: 'Cost Breakdown', desc: 'Where your money goes detail' },
                 { key: 'recentOrders', label: 'Recent Orders', desc: 'Latest 5 orders with profit' },
+                { key: 'customerLTV', label: 'Customer LTV', desc: 'Lifetime value and repeat rate' },
               ].map((widget) => (
                 <label
                   key={widget.key}
@@ -1881,6 +1954,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
                     aiProfitCoach: false,
                     costBreakdown: false,
                     recentOrders: false,
+                    customerLTV: false,
                   });
                 }}
                 className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition"

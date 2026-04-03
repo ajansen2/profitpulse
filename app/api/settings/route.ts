@@ -106,7 +106,11 @@ export async function POST(request: NextRequest) {
       'sms_enabled',
       'sms_phone_number',
       'sms_daily_digest',
+      'sms_weekly_digest',
       'sms_profit_alerts',
+      // Low stock alerts
+      'low_stock_alerts_enabled',
+      'low_stock_sms_enabled',
     ];
 
     const sanitizedUpdates: Record<string, any> = {};

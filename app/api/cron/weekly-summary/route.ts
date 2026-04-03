@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getWeeklySummaryEmail, WeeklySummaryData } from '@/lib/email-templates';
+import { sendSMS } from '@/lib/twilio';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -37,14 +38,17 @@ export async function GET(request: NextRequest) {
 
   for (const store of stores) {
     try {
-      // Check if store has weekly summary enabled
+      // Check if store has weekly summary enabled (email or SMS)
       const { data: settings } = await supabase
         .from('store_settings')
-        .select('email_weekly_summary')
+        .select('email_weekly_summary, sms_enabled, sms_weekly_digest, sms_phone_number')
         .eq('store_id', store.id)
         .single();
 
-      if (!settings?.email_weekly_summary) continue;
+      const emailEnabled = settings?.email_weekly_summary;
+      const smsEnabled = settings?.sms_enabled && settings?.sms_weekly_digest && settings?.sms_phone_number;
+
+      if (!emailEnabled && !smsEnabled) continue;
 
       // Get last week's data (Monday to Sunday)
       const today = new Date();
@@ -150,7 +154,7 @@ export async function GET(request: NextRequest) {
       const { subject, html } = getWeeklySummaryEmail(emailData);
 
       // Send email
-      if (store.email) {
+      if (emailEnabled && store.email) {
         await resend.emails.send({
           from: 'ProfitPulse <noreply@send.argora.ai>',
           to: store.email,
@@ -158,6 +162,39 @@ export async function GET(request: NextRequest) {
           html,
         });
         sent++;
+      }
+
+      // Send SMS weekly digest
+      if (smsEnabled && settings?.sms_phone_number) {
+        try {
+          const orderCompare = prevOrders && prevOrders.length > 0
+            ? (totalOrders >= prevOrders.length ? ` (↑${totalOrders - prevOrders.length})` : ` (↓${prevOrders.length - totalOrders})`)
+            : '';
+          const profitCompareStr = profitChange !== 0
+            ? (profitChange >= 0 ? ` (↑${profitChange.toFixed(0)}%)` : ` (↓${Math.abs(profitChange).toFixed(0)}%)`)
+            : '';
+
+          const profitEmoji = totalProfit >= 0 ? '💰' : '📉';
+          const profitStr = totalProfit >= 0 ? `$${totalProfit.toFixed(2)}` : `-$${Math.abs(totalProfit).toFixed(2)}`;
+
+          let smsBody = `📊 Weekly Summary
+${store.store_name}
+${emailData.weekStart} - ${emailData.weekEnd}
+
+Orders: ${totalOrders}${orderCompare}
+Revenue: $${totalRevenue.toFixed(2)}
+${profitEmoji} Profit: ${profitStr}${profitCompareStr}
+Margin: ${profitMargin.toFixed(1)}%`;
+
+          if (topProducts.length > 0) {
+            smsBody += `\n\nTop seller: ${topProducts[0].title} ($${topProducts[0].profit.toFixed(0)})`;
+          }
+
+          await sendSMS(settings.sms_phone_number, smsBody);
+          console.log('📱 Weekly SMS sent for', store.store_name);
+        } catch (smsErr) {
+          console.error('❌ Weekly SMS error:', smsErr);
+        }
       }
     } catch (error) {
       console.error(`Error sending weekly summary to ${store.store_name}:`, error);

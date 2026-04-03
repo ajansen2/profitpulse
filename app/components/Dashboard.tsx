@@ -129,6 +129,13 @@ interface AnalyticsData {
     best: number;
     isOnStreak: boolean;
   };
+  customerLTV?: {
+    uniqueCustomers: number;
+    repeatCustomers: number;
+    repeatCustomerRate: number;
+    avgCustomerLTV: number;
+    topCustomers: { email: string; orders: number; revenue: number; profit: number }[];
+  };
 }
 
 type DateRangeOption = '7d' | '14d' | '30d' | '90d';
@@ -171,6 +178,7 @@ export default function Dashboard({ store }: { store: Store }) {
     aiProfitCoach: true,
     costBreakdown: true,
     recentOrders: true,
+    customerLTV: true,
   });
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
@@ -1884,6 +1892,62 @@ export default function Dashboard({ store }: { store: Store }) {
             </div>
             )}
           </div>
+
+          {/* Customer LTV Widget */}
+          {dashboardWidgets.customerLTV && analytics?.customerLTV && (
+            <div className="bg-gradient-to-r from-cyan-500/10 to-teal-500/10 border border-cyan-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-cyan-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Customer Lifetime Value</h2>
+                  <p className="text-white/60 text-sm">Profit per customer over time</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-white/5 rounded-lg p-4 text-center">
+                  <div className="text-white/50 text-xs mb-1">Unique Customers</div>
+                  <div className="text-2xl font-bold text-white">{analytics.customerLTV.uniqueCustomers}</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 text-center">
+                  <div className="text-white/50 text-xs mb-1">Repeat Customers</div>
+                  <div className="text-2xl font-bold text-cyan-400">{analytics.customerLTV.repeatCustomers}</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 text-center">
+                  <div className="text-white/50 text-xs mb-1">Repeat Rate</div>
+                  <div className="text-2xl font-bold text-teal-400">{analytics.customerLTV.repeatCustomerRate.toFixed(1)}%</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 text-center">
+                  <div className="text-white/50 text-xs mb-1">Avg Customer LTV</div>
+                  <div className="text-2xl font-bold text-emerald-400">{formatCurrency(analytics.customerLTV.avgCustomerLTV)}</div>
+                </div>
+              </div>
+
+              {analytics.customerLTV.topCustomers.length > 0 && (
+                <div className="bg-white/5 rounded-lg p-4">
+                  <div className="text-white/50 text-xs mb-3">Top Customers by Profit</div>
+                  <div className="space-y-2">
+                    {analytics.customerLTV.topCustomers.slice(0, 3).map((customer, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 bg-cyan-500/20 rounded-full flex items-center justify-center text-cyan-400 text-xs font-bold">
+                            {i + 1}
+                          </span>
+                          <span className="text-white/80 text-sm">{customer.email}</span>
+                          <span className="text-white/40 text-xs">({customer.orders} orders)</span>
+                        </div>
+                        <span className="text-emerald-400 font-medium">{formatCurrency(customer.profit)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Industry Benchmarks */}
           {dashboardWidgets.industryBenchmarks && (

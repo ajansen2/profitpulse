@@ -275,6 +275,34 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Customer LTV calculations
+  const customerOrders: { [email: string]: { orders: number; revenue: number; profit: number } } = {};
+  for (const order of orders || []) {
+    const email = order.customer_email || 'guest';
+    if (!customerOrders[email]) {
+      customerOrders[email] = { orders: 0, revenue: 0, profit: 0 };
+    }
+    customerOrders[email].orders++;
+    customerOrders[email].revenue += order.total_price || 0;
+    customerOrders[email].profit += order.net_profit || 0;
+  }
+
+  const uniqueCustomers = Object.keys(customerOrders).filter(e => e !== 'guest').length;
+  const repeatCustomers = Object.values(customerOrders).filter(c => c.orders > 1).length;
+  const repeatCustomerRate = uniqueCustomers > 0 ? (repeatCustomers / uniqueCustomers) * 100 : 0;
+
+  const totalCustomerProfit = Object.values(customerOrders)
+    .filter((_, i) => Object.keys(customerOrders)[i] !== 'guest')
+    .reduce((sum, c) => sum + c.profit, 0);
+  const avgCustomerLTV = uniqueCustomers > 0 ? totalCustomerProfit / uniqueCustomers : 0;
+
+  // Top customers by profit
+  const topCustomers = Object.entries(customerOrders)
+    .filter(([email]) => email !== 'guest')
+    .map(([email, data]) => ({ email: email.replace(/(.{3}).*(@.*)/, '$1***$2'), ...data }))
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 5);
+
   return NextResponse.json({
     summary: {
       totalOrders,
@@ -330,6 +358,13 @@ export async function GET(request: NextRequest) {
       current: profitStreak,
       best: bestStreak,
       isOnStreak: profitStreak >= 2, // Show celebration if 2+ days
+    },
+    customerLTV: {
+      uniqueCustomers,
+      repeatCustomers,
+      repeatCustomerRate,
+      avgCustomerLTV,
+      topCustomers,
     },
   });
 }
