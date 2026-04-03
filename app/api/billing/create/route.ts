@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const accessToken = store.access_token;
+    console.log('💰 [BILLING CREATE] Token starts with:', accessToken?.substring(0, 10) + '...');
 
     // Check for valid access token
     if (!accessToken || accessToken === '' || accessToken === 'revoked') {
@@ -44,26 +45,49 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
 
-    const isTestStore = shop.includes('-test') || shop.includes('development') || shop.includes('dev-');
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://profitpulse.app';
-
-    // Check for existing charges
-    const existingResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/recurring_application_charges.json`,
+    // First, test if the token works at all with a simple API call
+    console.log('💰 [BILLING CREATE] Testing token with shop.json...');
+    const testResponse = await fetch(
+      `https://${shop}/admin/api/2024-01/shop.json`,
       { headers: { 'X-Shopify-Access-Token': accessToken } }
     );
+    console.log('💰 [BILLING CREATE] Shop.json response:', testResponse.status);
 
-    if (existingResponse.status === 401 || existingResponse.status === 403) {
-      console.log('❌ [BILLING CREATE] Auth error - marking token as revoked');
-      // Mark token as revoked so next OAuth attempt will get fresh token
+    if (!testResponse.ok) {
+      const testError = await testResponse.text();
+      console.log('❌ [BILLING CREATE] Token invalid - shop.json failed:', testError);
       await supabase
         .from('stores')
         .update({ access_token: 'revoked' })
         .eq('id', storeId);
       return NextResponse.json({
-        error: `Shopify API error: ${existingResponse.status}`,
+        error: `Token invalid - API test failed: ${testResponse.status}`,
         needsOAuth: true
       }, { status: 401 });
+    }
+    console.log('✅ [BILLING CREATE] Token valid for shop.json');
+
+    const isTestStore = shop.includes('-test') || shop.includes('development') || shop.includes('dev-');
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://profitpulse.app';
+
+    // Check for existing charges
+    console.log('💰 [BILLING CREATE] Checking existing charges...');
+    const existingResponse = await fetch(
+      `https://${shop}/admin/api/2024-01/recurring_application_charges.json`,
+      { headers: { 'X-Shopify-Access-Token': accessToken } }
+    );
+    console.log('💰 [BILLING CREATE] Existing charges response:', existingResponse.status);
+
+    if (existingResponse.status === 401 || existingResponse.status === 403) {
+      const errorBody = await existingResponse.text();
+      console.log('❌ [BILLING CREATE] Auth error on billing API:', errorBody);
+      console.log('❌ [BILLING CREATE] But token worked for shop.json - this is a BILLING PERMISSION issue');
+      // Don't mark as revoked since token is valid, just billing API is blocked
+      return NextResponse.json({
+        error: `Billing API error: ${existingResponse.status} - App may not have billing enabled in Shopify Partner Dashboard`,
+        details: errorBody,
+        needsOAuth: false  // Token is valid, billing is the issue
+      }, { status: 403 });
     }
 
     if (existingResponse.ok) {
