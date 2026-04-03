@@ -201,13 +201,51 @@ export async function GET(request: NextRequest) {
       console.log('⚠️ Webhook registration failed');
     }
 
-    // Create billing charge
-    console.log('💰 Creating billing charge...');
+    // Check for existing billing charges first
+    console.log('💰 Checking existing billing charges...');
 
-    const isTestStore = shop.includes('-test') || shop.includes('development');
+    const isTestStore = shop.includes('-test') || shop.includes('development') || shop.includes('dev-');
     const shopName = shop.replace('.myshopify.com', '');
     const clientId = process.env.SHOPIFY_API_KEY;
     const returnUrl = `${appUrl}/api/billing/callback?shop=${shop}&store_id=${store.id}`;
+
+    const existingChargesResponse = await fetch(
+      `https://${shop}/admin/api/2024-01/recurring_application_charges.json`,
+      { headers: { 'X-Shopify-Access-Token': access_token } }
+    );
+
+    if (existingChargesResponse.ok) {
+      const charges = await existingChargesResponse.json();
+      console.log('💰 Found charges:', charges.recurring_application_charges?.length || 0);
+
+      // Already has active subscription
+      const active = charges.recurring_application_charges?.find((c: any) => c.status === 'active');
+      if (active) {
+        console.log('✅ Found active charge, updating store and redirecting to app');
+        await supabase
+          .from('stores')
+          .update({ subscription_status: 'active', billing_charge_id: active.id.toString() })
+          .eq('id', store.id);
+
+        const response = NextResponse.redirect(`https://admin.shopify.com/store/${shopName}/apps/${clientId}`);
+        response.cookies.delete('shopify_oauth_state');
+        response.cookies.delete('shopify_oauth_shop');
+        return response;
+      }
+
+      // Has pending charge - redirect to it
+      const pending = charges.recurring_application_charges?.find((c: any) => c.status === 'pending');
+      if (pending) {
+        console.log('💰 Found pending charge, redirecting to confirmation');
+        const response = NextResponse.redirect(pending.confirmation_url);
+        response.cookies.delete('shopify_oauth_state');
+        response.cookies.delete('shopify_oauth_shop');
+        return response;
+      }
+    }
+
+    // No active or pending charge - create new one
+    console.log('💰 Creating new billing charge...');
 
     const chargeResponse = await fetch(`https://${shop}/admin/api/2024-01/recurring_application_charges.json`, {
       method: 'POST',
