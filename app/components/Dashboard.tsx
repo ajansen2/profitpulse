@@ -220,16 +220,17 @@ export default function Dashboard({ store }: { store: Store }) {
     if (!store) return;
     setSubscribing(true);
     try {
-      const response = await fetch('/api/billing/check', {
+      const response = await fetch('/api/billing/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop: store.shop_domain })
+        body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
       });
       const data = await response.json();
       if (data.confirmationUrl) {
         window.open(data.confirmationUrl, '_top');
-      } else if (data.oauthUrl) {
-        window.open(data.oauthUrl, '_top');
+      } else if (data.needsOAuth) {
+        // Redirect to OAuth if token is invalid
+        window.open(`/api/auth/shopify/install?shop=${store.shop_domain}`, '_top');
       }
     } catch (error) {
       console.error('Error creating billing charge:', error);
