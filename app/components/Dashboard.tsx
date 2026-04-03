@@ -2539,6 +2539,37 @@ export default function Dashboard({ store }: { store: Store }) {
                       </div>
                     </div>
                   )}
+
+                  {inventoryForecast.summary.totalProducts === 0 && (
+                    <div className="bg-white/5 rounded-lg p-4 mt-4">
+                      <p className="text-white/60 text-sm mb-3">
+                        No inventory data available. This could be because:
+                      </p>
+                      <ul className="text-white/50 text-sm space-y-1 mb-4 list-disc list-inside">
+                        <li>Products don&apos;t have inventory tracking enabled in Shopify</li>
+                        <li>Inventory hasn&apos;t been synced yet</li>
+                        <li>No sales in the last 30 days</li>
+                      </ul>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`/api/inventory/sync?store_id=${store.id}`, { method: 'POST' });
+                            if (res.ok) {
+                              // Refresh the forecast after sync
+                              const forecastRes = await fetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
+                              const data = await forecastRes.json();
+                              setInventoryForecast(data);
+                            }
+                          } catch (err) {
+                            console.error('Failed to sync inventory:', err);
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-sm rounded-lg transition"
+                      >
+                        Sync Inventory from Shopify
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -2689,103 +2720,6 @@ export default function Dashboard({ store }: { store: Store }) {
             </Suspense>
           </div>
           )}
-
-          {/* AI Price Optimizer */}
-          <div className="bg-gradient-to-r from-pink-500/10 to-rose-500/10 border border-pink-500/30 rounded-xl p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-pink-500/20 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-white">AI Price Optimizer</h2>
-                  <p className="text-white/60 text-sm">Get AI-powered pricing suggestions</p>
-                </div>
-              </div>
-              <button
-                onClick={async () => {
-                  setPriceOptimizerLoading(true);
-                  try {
-                    const res = await fetch(`/api/ai/price-optimizer?store_id=${store.id}`);
-                    const data = await res.json();
-                    setPriceOptimizer(data);
-                  } catch (err) {
-                    console.error('Price optimizer error:', err);
-                  } finally {
-                    setPriceOptimizerLoading(false);
-                  }
-                }}
-                disabled={priceOptimizerLoading}
-                className="px-4 py-2 bg-pink-600 hover:bg-pink-700 disabled:bg-pink-600/50 text-white rounded-lg font-medium text-sm transition flex items-center gap-2"
-              >
-                {priceOptimizerLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    Optimize Prices
-                  </>
-                )}
-              </button>
-            </div>
-
-            {priceOptimizer ? (
-              <div>
-                {priceOptimizer.overallInsight && (
-                  <div className="bg-white/5 rounded-lg p-4 mb-4">
-                    <p className="text-white/80 text-sm">{priceOptimizer.overallInsight}</p>
-                  </div>
-                )}
-
-                {priceOptimizer.suggestions.length > 0 ? (
-                  <div className="space-y-3">
-                    {priceOptimizer.suggestions.map((s, i) => (
-                      <div key={i} className="bg-white/5 rounded-lg p-4 border border-white/10">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-white font-medium">{s.productTitle}</span>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            s.confidence === 'high' ? 'bg-emerald-500/20 text-emerald-400' :
-                            s.confidence === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                            'bg-zinc-500/20 text-zinc-400'
-                          }`}>
-                            {s.confidence} confidence
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4 mb-2">
-                          <div>
-                            <span className="text-white/50 text-xs">Current</span>
-                            <div className="text-white font-medium">{formatCurrency(s.currentPrice)}</div>
-                          </div>
-                          <svg className="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                          </svg>
-                          <div>
-                            <span className="text-white/50 text-xs">Suggested</span>
-                            <div className="text-pink-400 font-medium">{formatCurrency(s.suggestedPrice)}</div>
-                          </div>
-                          <span className="text-pink-400 font-bold">{s.priceChange}</span>
-                        </div>
-                        <p className="text-white/60 text-sm">{s.reasoning}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-white/60 text-sm">No pricing suggestions available. Need more sales data.</p>
-                )}
-              </div>
-            ) : (
-              <p className="text-white/60 text-sm">
-                Click &quot;Optimize Prices&quot; to get AI suggestions for pricing your products optimally.
-              </p>
-            )}
-          </div>
 
           {/* Cost Breakdown */}
           {dashboardWidgets.costBreakdown && (
