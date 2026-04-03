@@ -54,7 +54,12 @@ export async function POST(request: NextRequest) {
     );
 
     if (existingResponse.status === 401 || existingResponse.status === 403) {
-      console.log('❌ [BILLING CREATE] Auth error');
+      console.log('❌ [BILLING CREATE] Auth error - marking token as revoked');
+      // Mark token as revoked so next OAuth attempt will get fresh token
+      await supabase
+        .from('stores')
+        .update({ access_token: 'revoked' })
+        .eq('id', storeId);
       return NextResponse.json({
         error: `Shopify API error: ${existingResponse.status}`,
         needsOAuth: true
