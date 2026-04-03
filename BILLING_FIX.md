@@ -1,13 +1,43 @@
 # Shopify Billing Fix Documentation
 
-## Problem
+## Problem 1: REST API Returns 403
 - Token is valid (shop.json returns 200)
 - Can READ existing charges (GET returns 200)
 - Cannot CREATE charges (POST returns 403)
 - Error body is `null` - Shopify gives no explanation
 
-## Root Cause
+### Root Cause
 Shopify has deprecated the REST Billing API (`/admin/api/2024-01/recurring_application_charges.json`) for newer apps. Apps must use the **GraphQL Billing API** instead.
+
+---
+
+## Problem 2: "Managed Pricing Apps cannot use the Billing API"
+
+If you get this error:
+```
+"Managed Pricing Apps cannot use the Billing API (to create charges)."
+```
+
+### Root Cause
+The app is configured as a **Managed Pricing App** in Partner Dashboard. This means:
+- Pricing is set in Partner Dashboard → App Setup → Pricing
+- Shopify handles billing automatically when merchants install from App Store
+- The app **cannot create charges via API**
+
+### Solution for Managed Pricing Apps
+1. Don't try to create charges - Shopify handles it
+2. Just check subscription status using GraphQL query
+3. If no subscription, redirect to Shopify admin charges page
+
+```typescript
+// For managed pricing apps, redirect to admin
+if (isManagedPricing) {
+  const adminUrl = `https://admin.shopify.com/store/${shopName}/charges/app_subscriptions`;
+  // Redirect user to manage their subscriptions
+}
+```
+
+---
 
 ## Solution
 Replace REST billing calls with GraphQL `appSubscriptionCreate` mutation.

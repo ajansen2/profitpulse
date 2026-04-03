@@ -184,6 +184,26 @@ export async function POST(request: NextRequest) {
     const userErrors = chargeData.data?.appSubscriptionCreate?.userErrors;
     if (userErrors && userErrors.length > 0) {
       console.error('❌ [BILLING CREATE] User errors:', userErrors);
+
+      // Check if this is a Managed Pricing App
+      const isManagedPricing = userErrors.some((e: any) =>
+        e.message?.includes('Managed Pricing')
+      );
+
+      if (isManagedPricing) {
+        console.log('💰 [BILLING CREATE] Managed Pricing App - redirecting to App Store');
+        // For managed pricing apps, redirect to Shopify App Store listing
+        // The app handle can be found in Partner Dashboard → App Setup → App URL
+        const appHandle = 'profitpulse-profit-analytics'; // Update this with your actual app handle
+        return NextResponse.json({
+          status: 'managed_pricing',
+          message: 'This app uses Shopify managed pricing. Please subscribe through the Shopify App Store.',
+          appStoreUrl: `https://apps.shopify.com/${appHandle}`,
+          // Alternative: redirect to admin apps page where they can manage subscription
+          adminUrl: `https://admin.shopify.com/store/${shop.replace('.myshopify.com', '')}/charges/app_subscriptions`
+        });
+      }
+
       return NextResponse.json({
         error: userErrors[0].message,
         details: userErrors

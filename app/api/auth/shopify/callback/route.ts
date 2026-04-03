@@ -312,6 +312,20 @@ export async function GET(request: NextRequest) {
 
     if (userErrors && userErrors.length > 0) {
       console.error('❌ Billing user errors:', userErrors);
+
+      // Check if this is a Managed Pricing App
+      const isManagedPricing = userErrors.some((e: any) =>
+        e.message?.includes('Managed Pricing')
+      );
+
+      if (isManagedPricing) {
+        console.log('💰 Managed Pricing App - billing handled by Shopify, redirecting to app');
+        // For managed pricing apps, just redirect to the app - Shopify handles billing
+        const response = NextResponse.redirect(`https://admin.shopify.com/store/${shopName}/apps/${clientId}`);
+        response.cookies.delete('shopify_oauth_state');
+        response.cookies.delete('shopify_oauth_shop');
+        return response;
+      }
     }
 
     if (confirmationUrl) {

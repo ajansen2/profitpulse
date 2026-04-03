@@ -259,6 +259,9 @@ export default function Dashboard({ store }: { store: Store }) {
       } else if (data.status === 'active') {
         // Already subscribed - reload to update UI
         window.location.reload();
+      } else if (data.status === 'managed_pricing') {
+        // Managed pricing apps - redirect to Shopify admin to manage subscription
+        window.open(data.adminUrl || `https://admin.shopify.com/store/${store.shop_domain.replace('.myshopify.com', '')}/charges/app_subscriptions`, '_top');
       } else if (data.needsOAuth) {
         // Try to refresh token using App Bridge first
         const refreshed = await tryRefreshToken();
@@ -272,6 +275,9 @@ export default function Dashboard({ store }: { store: Store }) {
           const retryData = await retryResponse.json();
           if (retryData.confirmationUrl) {
             window.open(retryData.confirmationUrl, '_top');
+            return;
+          } else if (retryData.status === 'managed_pricing') {
+            window.open(retryData.adminUrl || `https://admin.shopify.com/store/${store.shop_domain.replace('.myshopify.com', '')}/charges/app_subscriptions`, '_top');
             return;
           }
         }
@@ -1119,6 +1125,10 @@ export default function Dashboard({ store }: { store: Store }) {
                       }
                       console.log('Falling back to OAuth redirect');
                       window.open(`/api/auth/shopify/install?shop=${store.shop_domain}`, '_top');
+                    } else if (data.status === 'managed_pricing') {
+                      // Managed pricing apps - redirect to Shopify admin to manage subscription
+                      console.log('Managed pricing app - redirecting to admin');
+                      window.open(data.adminUrl || `https://admin.shopify.com/store/${store.shop_domain.replace('.myshopify.com', '')}/charges/app_subscriptions`, '_top');
                     } else {
                       console.log('Unknown response - no action taken');
                       alert('Billing response: ' + JSON.stringify(data));
