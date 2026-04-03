@@ -1056,6 +1056,9 @@ export default function Dashboard({ store }: { store: Store }) {
                     } else if (data.status === 'active') {
                       console.log('Already active - reloading');
                       window.location.reload();
+                    } else if (data.needsOAuth) {
+                      console.log('Needs OAuth - redirecting to install');
+                      window.open(`/api/auth/shopify/install?shop=${store.shop_domain}`, '_top');
                     } else {
                       console.log('Unknown response - no action taken');
                       alert('Billing response: ' + JSON.stringify(data));
