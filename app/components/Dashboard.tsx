@@ -136,6 +136,23 @@ interface AnalyticsData {
     avgCustomerLTV: number;
     topCustomers: { email: string; orders: number; revenue: number; profit: number }[];
   };
+  refundImpact?: {
+    totalRefunds: number;
+    refundCount: number;
+    refundRate: number;
+    profitLostToRefunds: number;
+    refundedOrders: { orderNumber: string; amount: number; date: string }[];
+  };
+  channelAttribution?: {
+    channel: string;
+    orders: number;
+    revenue: number;
+    profit: number;
+    adSpend: number;
+    trueProfit: number;
+    roas: number;
+    margin: number;
+  }[];
 }
 
 type DateRangeOption = '7d' | '14d' | '30d' | '90d';
@@ -182,6 +199,10 @@ export default function Dashboard({ store }: { store: Store }) {
     costBreakdown: true,
     recentOrders: true,
     customerLTV: true,
+    refundImpact: true,
+    channelAttribution: true,
+    priceOptimizer: true,
+    inventoryForecast: true,
   });
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
@@ -190,6 +211,17 @@ export default function Dashboard({ store }: { store: Store }) {
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [whatIfPriceChange, setWhatIfPriceChange] = useState(10); // Default 10% price increase
   const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
+  const [priceOptimizer, setPriceOptimizer] = useState<{
+    suggestions: { productTitle: string; currentPrice: number; suggestedPrice: number; priceChange: string; reasoning: string; confidence: string }[];
+    overallInsight: string;
+  } | null>(null);
+  const [priceOptimizerLoading, setPriceOptimizerLoading] = useState(false);
+  const [inventoryForecast, setInventoryForecast] = useState<{
+    summary: { totalProducts: number; totalProjectedProfit30d: number; totalOpportunityLost: number; criticalStockCount: number; lowStockCount: number };
+    topOpportunities: { title: string; currentInventory: number; daysOfStock: number; additionalProfitPotential: number; stockStatus: string }[];
+    atRiskProducts: { title: string; currentInventory: number; daysOfStock: number; dailyVelocity: number; stockStatus: string }[];
+  } | null>(null);
+  const [inventoryForecastLoading, setInventoryForecastLoading] = useState(false);
 
   // Refresh analytics when expenses change
   const refreshAnalytics = () => setAnalyticsRefreshKey(prev => prev + 1);
@@ -2186,6 +2218,338 @@ export default function Dashboard({ store }: { store: Store }) {
             </div>
           )}
 
+          {/* Refund Impact Widget */}
+          {dashboardWidgets.refundImpact && analytics?.refundImpact && (
+            <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Refund Impact</h2>
+                  <p className="text-white/60 text-sm">How refunds affect your bottom line</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-white/5 rounded-lg p-4 text-center">
+                  <div className="text-white/50 text-xs mb-1">Total Refunds</div>
+                  <div className="text-2xl font-bold text-red-400">{formatCurrency(analytics.refundImpact.totalRefunds)}</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 text-center">
+                  <div className="text-white/50 text-xs mb-1">Refund Count</div>
+                  <div className="text-2xl font-bold text-orange-400">{analytics.refundImpact.refundCount}</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 text-center">
+                  <div className="text-white/50 text-xs mb-1">Refund Rate</div>
+                  <div className={`text-2xl font-bold ${analytics.refundImpact.refundRate > 5 ? 'text-red-400' : analytics.refundImpact.refundRate > 2 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                    {analytics.refundImpact.refundRate.toFixed(1)}%
+                  </div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-4 text-center">
+                  <div className="text-white/50 text-xs mb-1">Profit Lost</div>
+                  <div className="text-2xl font-bold text-red-400">-{formatCurrency(Math.abs(analytics.refundImpact.profitLostToRefunds))}</div>
+                </div>
+              </div>
+
+              {analytics.refundImpact.refundCount === 0 ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 text-center">
+                  <span className="text-emerald-400 font-medium">No refunds in this period - great job!</span>
+                </div>
+              ) : analytics.refundImpact.refundRate > 5 ? (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-red-400 font-medium mb-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    High Refund Rate Alert
+                  </div>
+                  <p className="text-white/60 text-sm">Your refund rate of {analytics.refundImpact.refundRate.toFixed(1)}% is above industry average (2-3%). Review product descriptions and quality control.</p>
+                </div>
+              ) : (
+                <div className="bg-white/5 rounded-lg p-4">
+                  <p className="text-white/60 text-sm">Industry average refund rate is 2-3%. Your rate of {analytics.refundImpact.refundRate.toFixed(1)}% is within acceptable range.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Channel Attribution Widget */}
+          {dashboardWidgets.channelAttribution && analytics?.channelAttribution && analytics.channelAttribution.length > 0 && (
+            <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-violet-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Profit by Channel</h2>
+                  <p className="text-white/60 text-sm">Which traffic sources are actually profitable</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-white/50 text-xs uppercase border-b border-white/10">
+                      <th className="text-left py-3 px-2">Channel</th>
+                      <th className="text-right py-3 px-2">Orders</th>
+                      <th className="text-right py-3 px-2">Revenue</th>
+                      <th className="text-right py-3 px-2">Profit</th>
+                      <th className="text-right py-3 px-2">Ad Spend</th>
+                      <th className="text-right py-3 px-2">True Profit</th>
+                      <th className="text-right py-3 px-2">ROAS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analytics.channelAttribution.map((channel, i) => {
+                      const channelColors: { [key: string]: string } = {
+                        facebook: 'text-blue-400',
+                        google: 'text-red-400',
+                        tiktok: 'text-pink-400',
+                        instagram: 'text-purple-400',
+                        email: 'text-amber-400',
+                        direct: 'text-emerald-400',
+                        organic: 'text-green-400',
+                      };
+                      const color = channelColors[channel.channel.toLowerCase()] || 'text-white';
+
+                      return (
+                        <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                          <td className={`py-3 px-2 font-medium capitalize ${color}`}>
+                            {channel.channel === 'direct' ? 'Direct / Organic' : channel.channel}
+                          </td>
+                          <td className="text-right py-3 px-2 text-white/80">{channel.orders}</td>
+                          <td className="text-right py-3 px-2 text-white/80">{formatCurrency(channel.revenue)}</td>
+                          <td className="text-right py-3 px-2 text-emerald-400">{formatCurrency(channel.profit)}</td>
+                          <td className="text-right py-3 px-2 text-orange-400">
+                            {channel.adSpend > 0 ? formatCurrency(channel.adSpend) : '-'}
+                          </td>
+                          <td className={`text-right py-3 px-2 font-medium ${channel.trueProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {formatCurrency(channel.trueProfit)}
+                          </td>
+                          <td className="text-right py-3 px-2 text-white/80">
+                            {channel.roas > 0 ? `${channel.roas.toFixed(1)}x` : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 bg-white/5 rounded-lg p-4">
+                <p className="text-white/60 text-sm">
+                  <span className="text-violet-400 font-medium">Pro tip:</span> Focus ad spend on channels with highest True Profit. ROAS above 3x is generally considered good.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* AI Price Optimizer */}
+          {dashboardWidgets.priceOptimizer && (
+            <div className="bg-gradient-to-br from-cyan-900/30 to-blue-900/30 backdrop-blur border border-cyan-700/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-cyan-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">AI Price Optimizer</h2>
+                    <p className="text-white/60 text-sm">Get AI-powered pricing suggestions to maximize profit</p>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    setPriceOptimizerLoading(true);
+                    try {
+                      const res = await fetch(`/api/ai/price-optimizer?store_id=${store.id}`);
+                      const data = await res.json();
+                      setPriceOptimizer(data);
+                    } catch (err) {
+                      console.error('Failed to load price optimizer:', err);
+                    } finally {
+                      setPriceOptimizerLoading(false);
+                    }
+                  }}
+                  disabled={priceOptimizerLoading}
+                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:bg-cyan-500/50 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {priceOptimizerLoading ? 'Analyzing...' : priceOptimizer ? 'Refresh' : 'Optimize Prices'}
+                </button>
+              </div>
+
+              {priceOptimizer && (
+                <>
+                  {priceOptimizer.overallInsight && (
+                    <div className="bg-white/5 rounded-lg p-4 mb-4">
+                      <p className="text-cyan-300 text-sm italic">&ldquo;{priceOptimizer.overallInsight}&rdquo;</p>
+                    </div>
+                  )}
+
+                  {priceOptimizer.suggestions.length > 0 ? (
+                    <div className="space-y-3">
+                      {priceOptimizer.suggestions.map((suggestion, i) => (
+                        <div key={i} className="bg-white/5 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-white font-medium">{suggestion.productTitle}</span>
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                              suggestion.confidence === 'high' ? 'bg-emerald-500/20 text-emerald-400' :
+                              suggestion.confidence === 'medium' ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-zinc-500/20 text-zinc-400'
+                            }`}>
+                              {suggestion.confidence} confidence
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 mb-2">
+                            <span className="text-white/60 text-sm">
+                              {formatCurrency(suggestion.currentPrice)} → <span className="text-cyan-400 font-medium">{formatCurrency(suggestion.suggestedPrice)}</span>
+                            </span>
+                            <span className={`text-sm font-medium ${suggestion.priceChange.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {suggestion.priceChange}
+                            </span>
+                          </div>
+                          <p className="text-white/60 text-sm">{suggestion.reasoning}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-white/60">No pricing suggestions available yet. Ensure you have products with sales history.</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!priceOptimizer && !priceOptimizerLoading && (
+                <div className="text-center py-8">
+                  <p className="text-white/60">Click &ldquo;Optimize Prices&rdquo; to get AI-powered pricing recommendations based on your sales data and margins.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Inventory Profit Forecast */}
+          {dashboardWidgets.inventoryForecast && (
+            <div className="bg-gradient-to-br from-orange-900/30 to-amber-900/30 backdrop-blur border border-orange-700/30 rounded-xl p-6 mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Inventory Profit Forecast</h2>
+                    <p className="text-white/60 text-sm">Predict 30-day profit based on current stock levels</p>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    setInventoryForecastLoading(true);
+                    try {
+                      const res = await fetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
+                      const data = await res.json();
+                      setInventoryForecast(data);
+                    } catch (err) {
+                      console.error('Failed to load inventory forecast:', err);
+                    } finally {
+                      setInventoryForecastLoading(false);
+                    }
+                  }}
+                  disabled={inventoryForecastLoading}
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {inventoryForecastLoading ? 'Analyzing...' : inventoryForecast ? 'Refresh' : 'Generate Forecast'}
+                </button>
+              </div>
+
+              {inventoryForecast && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-white/5 rounded-lg p-4 text-center">
+                      <div className="text-white/60 text-xs mb-1">30-Day Projected</div>
+                      <div className="text-xl font-bold text-emerald-400">{formatCurrency(inventoryForecast.summary.totalProjectedProfit30d)}</div>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 text-center">
+                      <div className="text-white/60 text-xs mb-1">Opportunity Lost</div>
+                      <div className="text-xl font-bold text-orange-400">{formatCurrency(inventoryForecast.summary.totalOpportunityLost)}</div>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 text-center">
+                      <div className="text-white/60 text-xs mb-1">Critical Stock</div>
+                      <div className="text-xl font-bold text-red-400">{inventoryForecast.summary.criticalStockCount}</div>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-4 text-center">
+                      <div className="text-white/60 text-xs mb-1">Low Stock</div>
+                      <div className="text-xl font-bold text-amber-400">{inventoryForecast.summary.lowStockCount}</div>
+                    </div>
+                  </div>
+
+                  {inventoryForecast.atRiskProducts.length > 0 && (
+                    <div className="mb-6">
+                      <h3 className="text-white font-medium mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+                        At Risk of Stockout
+                      </h3>
+                      <div className="space-y-2">
+                        {inventoryForecast.atRiskProducts.map((product, i) => (
+                          <div key={i} className="bg-white/5 rounded-lg p-3 flex items-center justify-between">
+                            <div>
+                              <span className="text-white text-sm">{product.title}</span>
+                              <span className="text-white/40 text-xs ml-2">({product.currentInventory} units)</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-white/60 text-sm">{product.dailyVelocity.toFixed(1)}/day</span>
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                product.stockStatus === 'critical' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
+                              }`}>
+                                {product.daysOfStock} days left
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {inventoryForecast.topOpportunities.length > 0 && (
+                    <div>
+                      <h3 className="text-white font-medium mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
+                        Restock Opportunities
+                      </h3>
+                      <div className="space-y-2">
+                        {inventoryForecast.topOpportunities.map((product, i) => (
+                          <div key={i} className="bg-white/5 rounded-lg p-3 flex items-center justify-between">
+                            <div>
+                              <span className="text-white text-sm">{product.title}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-emerald-400 font-medium text-sm">+{formatCurrency(product.additionalProfitPotential)}</span>
+                              <span className="text-white/40 text-xs ml-1">potential</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!inventoryForecast && !inventoryForecastLoading && (
+                <div className="text-center py-8">
+                  <p className="text-white/60">Click &ldquo;Generate Forecast&rdquo; to see your 30-day profit potential based on current inventory levels and sales velocity.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Industry Benchmarks */}
           {dashboardWidgets.industryBenchmarks && (
           <div className="bg-zinc-900/50 backdrop-blur border border-zinc-800 rounded-xl p-6 mb-8">
@@ -2325,6 +2689,103 @@ export default function Dashboard({ store }: { store: Store }) {
             </Suspense>
           </div>
           )}
+
+          {/* AI Price Optimizer */}
+          <div className="bg-gradient-to-r from-pink-500/10 to-rose-500/10 border border-pink-500/30 rounded-xl p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-pink-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">AI Price Optimizer</h2>
+                  <p className="text-white/60 text-sm">Get AI-powered pricing suggestions</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  setPriceOptimizerLoading(true);
+                  try {
+                    const res = await fetch(`/api/ai/price-optimizer?store_id=${store.id}`);
+                    const data = await res.json();
+                    setPriceOptimizer(data);
+                  } catch (err) {
+                    console.error('Price optimizer error:', err);
+                  } finally {
+                    setPriceOptimizerLoading(false);
+                  }
+                }}
+                disabled={priceOptimizerLoading}
+                className="px-4 py-2 bg-pink-600 hover:bg-pink-700 disabled:bg-pink-600/50 text-white rounded-lg font-medium text-sm transition flex items-center gap-2"
+              >
+                {priceOptimizerLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Optimize Prices
+                  </>
+                )}
+              </button>
+            </div>
+
+            {priceOptimizer ? (
+              <div>
+                {priceOptimizer.overallInsight && (
+                  <div className="bg-white/5 rounded-lg p-4 mb-4">
+                    <p className="text-white/80 text-sm">{priceOptimizer.overallInsight}</p>
+                  </div>
+                )}
+
+                {priceOptimizer.suggestions.length > 0 ? (
+                  <div className="space-y-3">
+                    {priceOptimizer.suggestions.map((s, i) => (
+                      <div key={i} className="bg-white/5 rounded-lg p-4 border border-white/10">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-white font-medium">{s.productTitle}</span>
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            s.confidence === 'high' ? 'bg-emerald-500/20 text-emerald-400' :
+                            s.confidence === 'medium' ? 'bg-amber-500/20 text-amber-400' :
+                            'bg-zinc-500/20 text-zinc-400'
+                          }`}>
+                            {s.confidence} confidence
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 mb-2">
+                          <div>
+                            <span className="text-white/50 text-xs">Current</span>
+                            <div className="text-white font-medium">{formatCurrency(s.currentPrice)}</div>
+                          </div>
+                          <svg className="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                          </svg>
+                          <div>
+                            <span className="text-white/50 text-xs">Suggested</span>
+                            <div className="text-pink-400 font-medium">{formatCurrency(s.suggestedPrice)}</div>
+                          </div>
+                          <span className="text-pink-400 font-bold">{s.priceChange}</span>
+                        </div>
+                        <p className="text-white/60 text-sm">{s.reasoning}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-white/60 text-sm">No pricing suggestions available. Need more sales data.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-white/60 text-sm">
+                Click &quot;Optimize Prices&quot; to get AI suggestions for pricing your products optimally.
+              </p>
+            )}
+          </div>
 
           {/* Cost Breakdown */}
           {dashboardWidgets.costBreakdown && (

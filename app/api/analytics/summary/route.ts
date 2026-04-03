@@ -303,6 +303,65 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.profit - a.profit)
     .slice(0, 5);
 
+  // Refund Impact Tracking
+  const refundedOrders = orders?.filter(o =>
+    o.financial_status === 'refunded' ||
+    o.financial_status === 'partially_refunded' ||
+    (o.refund_amount && o.refund_amount > 0)
+  ) || [];
+
+  const totalRefunds = refundedOrders.reduce((sum, o) => sum + (o.refund_amount || o.total_price || 0), 0);
+  const refundCount = refundedOrders.length;
+  const refundRate = totalOrders > 0 ? (refundCount / totalOrders) * 100 : 0;
+
+  // Calculate profit lost to refunds (we gave back the revenue but already paid COGS/fees)
+  const profitLostToRefunds = refundedOrders.reduce((sum, o) => {
+    // When refunded, we lose the profit AND the COGS we already paid
+    return sum + (o.net_profit || 0) + (o.total_cogs || 0);
+  }, 0);
+
+  // Profit Attribution by Channel
+  const channelData: { [key: string]: { orders: number; revenue: number; profit: number; cogs: number } } = {};
+
+  for (const order of orders || []) {
+    const channel = order.attributed_platform || 'direct';
+    if (!channelData[channel]) {
+      channelData[channel] = { orders: 0, revenue: 0, profit: 0, cogs: 0 };
+    }
+    channelData[channel].orders += 1;
+    channelData[channel].revenue += order.total_price || 0;
+    channelData[channel].profit += order.net_profit || 0;
+    channelData[channel].cogs += order.total_cogs || 0;
+  }
+
+  // Add ad spend per channel
+  const adSpendByChannel: { [key: string]: number } = {};
+  for (const ad of adSpend || []) {
+    const platform = ad.platform?.toLowerCase() || 'other';
+    adSpendByChannel[platform] = (adSpendByChannel[platform] || 0) + (ad.spend || 0);
+  }
+
+  // Calculate ROAS and true profit per channel
+  const channelAttribution = Object.entries(channelData)
+    .map(([channel, data]) => {
+      const channelAdSpend = adSpendByChannel[channel] || 0;
+      const trueProfit = data.profit - channelAdSpend;
+      const roas = channelAdSpend > 0 ? data.revenue / channelAdSpend : 0;
+      const margin = data.revenue > 0 ? (data.profit / data.revenue) * 100 : 0;
+
+      return {
+        channel,
+        orders: data.orders,
+        revenue: data.revenue,
+        profit: data.profit,
+        adSpend: channelAdSpend,
+        trueProfit,
+        roas,
+        margin,
+      };
+    })
+    .sort((a, b) => b.profit - a.profit);
+
   return NextResponse.json({
     summary: {
       totalOrders,
@@ -366,5 +425,17 @@ export async function GET(request: NextRequest) {
       avgCustomerLTV,
       topCustomers,
     },
+    refundImpact: {
+      totalRefunds,
+      refundCount,
+      refundRate,
+      profitLostToRefunds,
+      refundedOrders: refundedOrders.slice(0, 5).map(o => ({
+        orderNumber: o.order_number,
+        amount: o.refund_amount || o.total_price,
+        date: o.order_created_at,
+      })),
+    },
+    channelAttribution,
   });
 }

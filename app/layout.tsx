@@ -4,6 +4,19 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'ProfitPulse - Real-Time Profit Analytics',
   description: 'Know your true profit on every order',
+  manifest: '/manifest.json',
+  themeColor: '#10b981',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'ProfitPulse',
+  },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
 };
 
 export default function RootLayout({
@@ -16,6 +29,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* PWA Meta Tags */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="ProfitPulse" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
         {/* Shopify App Bridge - MUST be first script, synchronous, from CDN */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
@@ -66,6 +85,21 @@ export default function RootLayout({
             // Start initialization attempt
             initializeAppBridge();
           })();
+        `}} />
+        {/* Service Worker Registration for PWA */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script dangerouslySetInnerHTML={{__html: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+              navigator.serviceWorker.register('/sw.js')
+                .then(function(registration) {
+                  console.log('✅ ServiceWorker registered:', registration.scope);
+                })
+                .catch(function(error) {
+                  console.log('❌ ServiceWorker registration failed:', error);
+                });
+            });
+          }
         `}} />
       </head>
       <body className="bg-gray-50 text-gray-900 antialiased">

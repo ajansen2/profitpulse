@@ -29,6 +29,10 @@ interface DashboardWidgets {
   costBreakdown: boolean;
   recentOrders: boolean;
   customerLTV: boolean;
+  refundImpact: boolean;
+  channelAttribution: boolean;
+  priceOptimizer: boolean;
+  inventoryForecast: boolean;
 }
 
 const DEFAULT_WIDGETS: DashboardWidgets = {
@@ -48,6 +52,10 @@ const DEFAULT_WIDGETS: DashboardWidgets = {
   costBreakdown: true,
   recentOrders: true,
   customerLTV: true,
+  refundImpact: true,
+  channelAttribution: true,
+  priceOptimizer: true,
+  inventoryForecast: true,
 };
 
 interface StoreSettings {
@@ -1906,6 +1914,10 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
                 { key: 'costBreakdown', label: 'Cost Breakdown', desc: 'Where your money goes detail' },
                 { key: 'recentOrders', label: 'Recent Orders', desc: 'Latest 5 orders with profit' },
                 { key: 'customerLTV', label: 'Customer LTV', desc: 'Lifetime value and repeat rate' },
+                { key: 'refundImpact', label: 'Refund Impact', desc: 'Track how refunds affect profit' },
+                { key: 'channelAttribution', label: 'Profit by Channel', desc: 'Revenue by traffic source' },
+                { key: 'priceOptimizer', label: 'AI Price Optimizer', desc: 'AI-powered pricing suggestions' },
+                { key: 'inventoryForecast', label: 'Inventory Forecast', desc: '30-day profit forecast by stock' },
               ].map((widget) => (
                 <label
                   key={widget.key}
@@ -1955,6 +1967,10 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
                     costBreakdown: false,
                     recentOrders: false,
                     customerLTV: false,
+                    refundImpact: false,
+                    channelAttribution: false,
+                    priceOptimizer: false,
+                    inventoryForecast: false,
                   });
                 }}
                 className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition"
