@@ -96,6 +96,10 @@ export async function POST(request: NextRequest) {
       notFound,
       shopifyProducts: products?.length || 0,
       dbProducts: dbProducts?.length || 0,
+      debug: {
+        shopifyVariantIds: shopifyVariantIds.slice(0, 5),
+        dbVariantIds: dbProducts?.map(p => p.shopify_variant_id).slice(0, 5),
+      }
     });
   } catch (error) {
     console.error('Inventory sync error:', error);
