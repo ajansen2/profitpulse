@@ -96,8 +96,8 @@ export async function GET(request: NextRequest) {
         stockStatus: daysOfStock < 7 ? 'critical' : daysOfStock < 14 ? 'low' : daysOfStock < 30 ? 'adequate' : 'overstocked',
       };
     })
-    .filter(f => f.dailyVelocity > 0) // Only products with recent sales
-    .sort((a, b) => b.additionalProfitPotential - a.additionalProfitPotential);
+    .filter(f => f.currentInventory > 0 || f.dailyVelocity > 0) // Products with inventory OR recent sales
+    .sort((a, b) => b.projectedProfit30d - a.projectedProfit30d);
 
   // Calculate summary stats
   const totalProjectedProfit = forecasts.reduce((sum, f) => sum + f.projectedProfit30d, 0);
