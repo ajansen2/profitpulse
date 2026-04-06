@@ -217,8 +217,8 @@ export default function Dashboard({ store }: { store: Store }) {
   } | null>(null);
   const [priceOptimizerLoading, setPriceOptimizerLoading] = useState(false);
   const [inventoryForecast, setInventoryForecast] = useState<{
-    summary: { totalProducts: number; totalProjectedProfit30d: number; totalOpportunityLost: number; criticalStockCount: number; lowStockCount: number };
-    topOpportunities: { title: string; currentInventory: number; daysOfStock: number; additionalProfitPotential: number; stockStatus: string }[];
+    summary: { totalProducts: number; totalProjectedProfit30d: number; totalOpportunityLost: number; criticalStockCount: number; lowStockCount: number; totalInventoryValue?: number; totalPotentialProfit?: number; totalUnitsInStock?: number };
+    topOpportunities: { title: string; currentInventory: number; daysOfStock: number; additionalProfitPotential: number; stockStatus: string; potentialProfit?: number; costPerItem: number; profitPerUnit: number }[];
     atRiskProducts: { title: string; currentInventory: number; daysOfStock: number; dailyVelocity: number; stockStatus: string }[];
     debug?: { storeId: string; totalProductsInDB: number; productsWithInventory: number; productsWithSales: number; lineItemsFound: number; productsError?: string; sampleInventory: { title: string; qty: number }[] };
   } | null>(null);
@@ -2475,20 +2475,24 @@ export default function Dashboard({ store }: { store: Store }) {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <div className="bg-white/5 rounded-lg p-4 text-center">
-                      <div className="text-white/60 text-xs mb-1">30-Day Projected</div>
-                      <div className="text-xl font-bold text-emerald-400">{formatCurrency(inventoryForecast.summary.totalProjectedProfit30d)}</div>
+                      <div className="text-white/60 text-xs mb-1">Potential Profit</div>
+                      <div className="text-xl font-bold text-emerald-400">{formatCurrency(inventoryForecast.summary.totalPotentialProfit || 0)}</div>
+                      <div className="text-white/40 text-xs">if all stock sells</div>
                     </div>
                     <div className="bg-white/5 rounded-lg p-4 text-center">
-                      <div className="text-white/60 text-xs mb-1">Opportunity Lost</div>
-                      <div className="text-xl font-bold text-orange-400">{formatCurrency(inventoryForecast.summary.totalOpportunityLost)}</div>
+                      <div className="text-white/60 text-xs mb-1">Inventory Value</div>
+                      <div className="text-xl font-bold text-cyan-400">{formatCurrency(inventoryForecast.summary.totalInventoryValue || 0)}</div>
+                      <div className="text-white/40 text-xs">at cost</div>
                     </div>
                     <div className="bg-white/5 rounded-lg p-4 text-center">
-                      <div className="text-white/60 text-xs mb-1">Critical Stock</div>
-                      <div className="text-xl font-bold text-red-400">{inventoryForecast.summary.criticalStockCount}</div>
+                      <div className="text-white/60 text-xs mb-1">Units in Stock</div>
+                      <div className="text-xl font-bold text-white">{inventoryForecast.summary.totalUnitsInStock || 0}</div>
+                      <div className="text-white/40 text-xs">{inventoryForecast.summary.totalProducts} products</div>
                     </div>
                     <div className="bg-white/5 rounded-lg p-4 text-center">
-                      <div className="text-white/60 text-xs mb-1">Low Stock</div>
-                      <div className="text-xl font-bold text-amber-400">{inventoryForecast.summary.lowStockCount}</div>
+                      <div className="text-white/60 text-xs mb-1">Low/Critical</div>
+                      <div className="text-xl font-bold text-amber-400">{inventoryForecast.summary.lowStockCount + inventoryForecast.summary.criticalStockCount}</div>
+                      <div className="text-white/40 text-xs">need restock</div>
                     </div>
                   </div>
 
@@ -2523,16 +2527,17 @@ export default function Dashboard({ store }: { store: Store }) {
                     <div>
                       <h3 className="text-white font-medium mb-3 flex items-center gap-2">
                         <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
-                        Restock Opportunities
+                        Top Products in Stock
                       </h3>
                       <div className="space-y-2">
-                        {inventoryForecast.topOpportunities.map((product, i) => (
+                        {inventoryForecast.topOpportunities.map((product: { title: string; currentInventory: number; potentialProfit?: number; costPerItem: number; profitPerUnit: number }, i) => (
                           <div key={i} className="bg-white/5 rounded-lg p-3 flex items-center justify-between">
                             <div>
                               <span className="text-white text-sm">{product.title}</span>
+                              <span className="text-white/40 text-xs ml-2">({product.currentInventory} units)</span>
                             </div>
                             <div className="text-right">
-                              <span className="text-emerald-400 font-medium text-sm">+{formatCurrency(product.additionalProfitPotential)}</span>
+                              <span className="text-emerald-400 font-medium text-sm">{formatCurrency(product.potentialProfit || product.profitPerUnit * product.currentInventory)}</span>
                               <span className="text-white/40 text-xs ml-1">potential</span>
                             </div>
                           </div>

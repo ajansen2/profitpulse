@@ -105,14 +105,24 @@ export async function GET(request: NextRequest) {
   const criticalStock = forecasts.filter(f => f.stockStatus === 'critical').length;
   const lowStock = forecasts.filter(f => f.stockStatus === 'low').length;
 
-  // Top opportunities
-  const topOpportunities = forecasts
-    .filter(f => f.additionalProfitPotential > 0 && f.stockStatus !== 'overstocked')
-    .slice(0, 5);
+  // Calculate total inventory value and potential
+  const totalInventoryValue = forecasts.reduce((sum, f) => sum + (f.costPerItem * f.currentInventory), 0);
+  const totalPotentialProfit = forecasts.reduce((sum, f) => sum + (f.profitPerUnit * f.currentInventory), 0);
+  const totalUnitsInStock = forecasts.reduce((sum, f) => sum + f.currentInventory, 0);
 
-  // Products at risk of stockout
+  // Top opportunities - products with inventory (show potential profit if sold)
+  const topOpportunities = forecasts
+    .filter(f => f.currentInventory > 0)
+    .sort((a, b) => (b.profitPerUnit * b.currentInventory) - (a.profitPerUnit * a.currentInventory))
+    .slice(0, 5)
+    .map(f => ({
+      ...f,
+      potentialProfit: f.profitPerUnit * f.currentInventory,
+    }));
+
+  // Products at risk of stockout (only if they have sales velocity)
   const atRisk = forecasts
-    .filter(f => f.stockStatus === 'critical' || f.stockStatus === 'low')
+    .filter(f => f.dailyVelocity > 0 && (f.stockStatus === 'critical' || f.stockStatus === 'low'))
     .slice(0, 5);
 
   // Debug info
@@ -126,6 +136,10 @@ export async function GET(request: NextRequest) {
       totalOpportunityLost: totalOpportunity,
       criticalStockCount: criticalStock,
       lowStockCount: lowStock,
+      // New: inventory value metrics
+      totalInventoryValue,
+      totalPotentialProfit,
+      totalUnitsInStock,
     },
     topOpportunities,
     atRiskProducts: atRisk,
