@@ -220,7 +220,7 @@ export default function Dashboard({ store }: { store: Store }) {
     summary: { totalProducts: number; totalProjectedProfit30d: number; totalOpportunityLost: number; criticalStockCount: number; lowStockCount: number };
     topOpportunities: { title: string; currentInventory: number; daysOfStock: number; additionalProfitPotential: number; stockStatus: string }[];
     atRiskProducts: { title: string; currentInventory: number; daysOfStock: number; dailyVelocity: number; stockStatus: string }[];
-    debug?: { totalProductsInDB: number; productsWithInventory: number; productsWithSales: number; lineItemsFound: number; sampleInventory: { title: string; qty: number }[] };
+    debug?: { storeId: string; totalProductsInDB: number; productsWithInventory: number; productsWithSales: number; lineItemsFound: number; productsError?: string; sampleInventory: { title: string; qty: number }[] };
   } | null>(null);
   const [inventoryForecastLoading, setInventoryForecastLoading] = useState(false);
 
@@ -2548,11 +2548,12 @@ export default function Dashboard({ store }: { store: Store }) {
                       </p>
                       {inventoryForecast.debug && (
                         <ul className="text-white/50 text-xs space-y-1 mb-4 font-mono">
+                          <li>Store ID: {inventoryForecast.debug.storeId}</li>
                           <li>Products in DB: {inventoryForecast.debug.totalProductsInDB}</li>
                           <li>With inventory &gt; 0: {inventoryForecast.debug.productsWithInventory}</li>
                           <li>With sales (30d): {inventoryForecast.debug.productsWithSales}</li>
                           <li>Line items found: {inventoryForecast.debug.lineItemsFound}</li>
-                          <li>Sample inventory: {JSON.stringify(inventoryForecast.debug.sampleInventory)}</li>
+                          {inventoryForecast.debug.productsError && <li className="text-red-400">Error: {inventoryForecast.debug.productsError}</li>}
                         </ul>
                       )}
                       <button

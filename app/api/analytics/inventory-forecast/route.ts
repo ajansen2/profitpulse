@@ -22,10 +22,12 @@ export async function GET(request: NextRequest) {
   startDate.setDate(startDate.getDate() - 30);
 
   // Get products with inventory (stored per variant)
-  const { data: products } = await supabase
+  const { data: products, error: productsError } = await supabase
     .from('products')
     .select('shopify_product_id, shopify_variant_id, title, price, cost_per_item, inventory_quantity')
     .eq('store_id', storeId);
+
+  console.log('[Inventory Forecast] store_id:', storeId, 'products found:', products?.length, 'error:', productsError?.message);
 
   // Get sales data by variant
   const { data: lineItems } = await supabase
@@ -128,13 +130,13 @@ export async function GET(request: NextRequest) {
     atRiskProducts: atRisk,
     allForecasts: forecasts,
     debug: {
+      storeId,
       totalProductsInDB: products?.length || 0,
       productsWithInventory: productsWithInventory.length,
       productsWithSales: productsWithSales,
       lineItemsFound: lineItems?.length || 0,
+      productsError: productsError?.message,
       sampleInventory: products?.slice(0, 3).map(p => ({ title: p.title, qty: p.inventory_quantity })),
-      sampleSalesVariantIds: Object.keys(salesData).slice(0, 3),
-      sampleProductVariantIds: products?.slice(0, 3).map(p => p.shopify_variant_id),
     },
   });
 }
