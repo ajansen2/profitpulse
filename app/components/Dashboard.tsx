@@ -2560,8 +2560,8 @@ export default function Dashboard({ store }: { store: Store }) {
                             });
                             const result = await res.json();
                             if (res.ok) {
-                              const debugInfo = result.debug ? `\n\nShopify IDs: ${result.debug.shopifyVariantIds?.join(', ')}\nDB IDs: ${result.debug.dbVariantIds?.join(', ')}` : '';
-                              alert(`Synced ${result.synced} variants!\n\nShopify products: ${result.shopifyProducts}\nDB products: ${result.dbProducts}\nNot found in DB: ${result.notFound}${debugInfo}`);
+                              const errInfo = result.errors?.length ? `\nErrors: ${result.errors.join(', ')}` : '';
+                              alert(`Synced ${result.synced} variants!\n\nMatching IDs: ${result.matchingIds}\nShopify variants: ${result.shopifyVariants}\nDB products: ${result.dbProducts}${errInfo}`);
                               // Refresh the forecast after sync
                               const forecastRes = await fetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
                               const data = await forecastRes.json();

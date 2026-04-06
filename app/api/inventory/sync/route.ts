@@ -58,44 +58,58 @@ export async function POST(request: NextRequest) {
     console.log('[Inventory Sync] Products in DB:', dbProducts?.length || 0);
     console.log('[Inventory Sync] DB variant IDs:', dbProducts?.map(p => p.shopify_variant_id).slice(0, 10));
 
-    let synced = 0;
-    let notFound = 0;
-    const shopifyVariantIds: string[] = [];
-
-    // Update inventory for each product variant
+    // Build a map of variant ID -> inventory quantity from Shopify
+    const inventoryMap: { [key: string]: number } = {};
     for (const product of products || []) {
       for (const variant of product.variants || []) {
-        const inventoryQuantity = variant.inventory_quantity || 0;
-        const variantId = String(variant.id);
-        shopifyVariantIds.push(variantId);
+        inventoryMap[String(variant.id)] = variant.inventory_quantity || 0;
+      }
+    }
+    const shopifyVariantIds = Object.keys(inventoryMap);
 
-        const { data, error } = await supabase
-          .from('products')
-          .update({
-            inventory_quantity: inventoryQuantity,
-            inventory_updated_at: new Date().toISOString(),
-          })
-          .eq('store_id', store_id)
-          .eq('shopify_variant_id', variantId)
-          .select();
+    // Create a set of DB variant IDs for fast lookup
+    const dbVariantIdSet = new Set(dbProducts?.map(p => String(p.shopify_variant_id)) || []);
 
-        if (data && data.length > 0) {
-          synced++;
-        } else {
-          notFound++;
-        }
+    // Find matching IDs
+    const matchingIds = shopifyVariantIds.filter(id => dbVariantIdSet.has(id));
+    console.log('[Inventory Sync] Matching IDs:', matchingIds.length, matchingIds.slice(0, 5));
+
+    let synced = 0;
+    let errors: string[] = [];
+
+    // Update each matching product
+    for (const variantId of matchingIds) {
+      const inventoryQuantity = inventoryMap[variantId];
+
+      const { data, error } = await supabase
+        .from('products')
+        .update({
+          inventory_quantity: inventoryQuantity,
+          inventory_updated_at: new Date().toISOString(),
+        })
+        .eq('store_id', store_id)
+        .eq('shopify_variant_id', variantId)
+        .select('id');
+
+      if (error) {
+        errors.push(`${variantId}: ${error.message}`);
+      } else if (data && data.length > 0) {
+        synced++;
+      } else {
+        errors.push(`${variantId}: no rows updated`);
       }
     }
 
-    console.log('[Inventory Sync] Shopify variant IDs (first 10):', shopifyVariantIds.slice(0, 10));
-    console.log('[Inventory Sync] Synced:', synced, 'Not found in DB:', notFound);
+    console.log('[Inventory Sync] Synced:', synced, 'Errors:', errors.length);
+    if (errors.length > 0) console.log('[Inventory Sync] Errors:', errors.slice(0, 5));
 
     return NextResponse.json({
       success: true,
       synced,
-      notFound,
-      shopifyProducts: products?.length || 0,
+      matchingIds: matchingIds.length,
+      shopifyVariants: shopifyVariantIds.length,
       dbProducts: dbProducts?.length || 0,
+      errors: errors.slice(0, 3),
       debug: {
         shopifyVariantIds: shopifyVariantIds.slice(0, 5),
         dbVariantIds: dbProducts?.map(p => p.shopify_variant_id).slice(0, 5),
