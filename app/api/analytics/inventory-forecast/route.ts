@@ -22,12 +22,10 @@ export async function GET(request: NextRequest) {
   startDate.setDate(startDate.getDate() - 30);
 
   // Get products with inventory (stored per variant)
-  const { data: products, error: productsError } = await supabase
+  const { data: products } = await supabase
     .from('products')
     .select('shopify_product_id, shopify_variant_id, title, cost_per_item, inventory_quantity')
     .eq('store_id', storeId);
-
-  console.log('[Inventory Forecast] store_id:', storeId, 'products found:', products?.length, 'error:', productsError?.message);
 
   // Get sales data by variant
   const { data: lineItems } = await supabase
@@ -125,10 +123,6 @@ export async function GET(request: NextRequest) {
     .filter(f => f.dailyVelocity > 0 && (f.stockStatus === 'critical' || f.stockStatus === 'low'))
     .slice(0, 5);
 
-  // Debug info
-  const productsWithInventory = (products || []).filter(p => (p.inventory_quantity || 0) > 0);
-  const productsWithSales = Object.keys(salesData).length;
-
   return NextResponse.json({
     summary: {
       totalProducts: forecasts.length,
@@ -136,7 +130,6 @@ export async function GET(request: NextRequest) {
       totalOpportunityLost: totalOpportunity,
       criticalStockCount: criticalStock,
       lowStockCount: lowStock,
-      // New: inventory value metrics
       totalInventoryValue,
       totalPotentialProfit,
       totalUnitsInStock,
@@ -144,14 +137,5 @@ export async function GET(request: NextRequest) {
     topOpportunities,
     atRiskProducts: atRisk,
     allForecasts: forecasts,
-    debug: {
-      storeId,
-      totalProductsInDB: products?.length || 0,
-      productsWithInventory: productsWithInventory.length,
-      productsWithSales: productsWithSales,
-      lineItemsFound: lineItems?.length || 0,
-      productsError: productsError?.message,
-      sampleInventory: products?.slice(0, 3).map(p => ({ title: p.title, qty: p.inventory_quantity })),
-    },
   });
 }

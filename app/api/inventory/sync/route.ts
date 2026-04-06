@@ -41,22 +41,16 @@ export async function POST(request: NextRequest) {
     );
 
     if (!response.ok) {
-      console.error('Shopify API error:', response.status);
       return NextResponse.json({ error: 'Failed to fetch from Shopify' }, { status: 500 });
     }
 
     const { products } = await response.json();
 
-    console.log('[Inventory Sync] Fetched products from Shopify:', products?.length || 0);
-
-    // Get existing products in our DB to see what variant IDs we have
+    // Get existing products in our DB
     const { data: dbProducts } = await supabase
       .from('products')
-      .select('shopify_variant_id, title')
+      .select('shopify_variant_id')
       .eq('store_id', store_id);
-
-    console.log('[Inventory Sync] Products in DB:', dbProducts?.length || 0);
-    console.log('[Inventory Sync] DB variant IDs:', dbProducts?.map(p => p.shopify_variant_id).slice(0, 10));
 
     // Build a map of variant ID -> inventory quantity from Shopify
     const inventoryMap: { [key: string]: number } = {};
@@ -65,56 +59,32 @@ export async function POST(request: NextRequest) {
         inventoryMap[String(variant.id)] = variant.inventory_quantity || 0;
       }
     }
-    const shopifyVariantIds = Object.keys(inventoryMap);
 
     // Create a set of DB variant IDs for fast lookup
     const dbVariantIdSet = new Set(dbProducts?.map(p => String(p.shopify_variant_id)) || []);
 
-    // Find matching IDs
-    const matchingIds = shopifyVariantIds.filter(id => dbVariantIdSet.has(id));
-    console.log('[Inventory Sync] Matching IDs:', matchingIds.length, matchingIds.slice(0, 5));
+    // Find matching IDs and update
+    const matchingIds = Object.keys(inventoryMap).filter(id => dbVariantIdSet.has(id));
 
     let synced = 0;
-    let errors: string[] = [];
 
-    // Update each matching product
     for (const variantId of matchingIds) {
-      const inventoryQuantity = inventoryMap[variantId];
-
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('products')
         .update({
-          inventory_quantity: inventoryQuantity,
+          inventory_quantity: inventoryMap[variantId],
           inventory_updated_at: new Date().toISOString(),
         })
         .eq('store_id', store_id)
         .eq('shopify_variant_id', variantId)
         .select('id');
 
-      if (error) {
-        errors.push(`${variantId}: ${error.message}`);
-      } else if (data && data.length > 0) {
+      if (data && data.length > 0) {
         synced++;
-      } else {
-        errors.push(`${variantId}: no rows updated`);
       }
     }
 
-    console.log('[Inventory Sync] Synced:', synced, 'Errors:', errors.length);
-    if (errors.length > 0) console.log('[Inventory Sync] Errors:', errors.slice(0, 5));
-
-    return NextResponse.json({
-      success: true,
-      synced,
-      matchingIds: matchingIds.length,
-      shopifyVariants: shopifyVariantIds.length,
-      dbProducts: dbProducts?.length || 0,
-      errors: errors.slice(0, 3),
-      debug: {
-        shopifyVariantIds: shopifyVariantIds.slice(0, 5),
-        dbVariantIds: dbProducts?.map(p => p.shopify_variant_id).slice(0, 5),
-      }
-    });
+    return NextResponse.json({ success: true, synced });
   } catch (error) {
     console.error('Inventory sync error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

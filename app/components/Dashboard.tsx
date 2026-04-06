@@ -220,7 +220,6 @@ export default function Dashboard({ store }: { store: Store }) {
     summary: { totalProducts: number; totalProjectedProfit30d: number; totalOpportunityLost: number; criticalStockCount: number; lowStockCount: number; totalInventoryValue?: number; totalPotentialProfit?: number; totalUnitsInStock?: number };
     topOpportunities: { title: string; currentInventory: number; daysOfStock: number; additionalProfitPotential: number; stockStatus: string; potentialProfit?: number; costPerItem: number; profitPerUnit: number }[];
     atRiskProducts: { title: string; currentInventory: number; daysOfStock: number; dailyVelocity: number; stockStatus: string }[];
-    debug?: { storeId: string; totalProductsInDB: number; productsWithInventory: number; productsWithSales: number; lineItemsFound: number; productsError?: string; sampleInventory: { title: string; qty: number }[] };
   } | null>(null);
   const [inventoryForecastLoading, setInventoryForecastLoading] = useState(false);
 
@@ -2549,18 +2548,8 @@ export default function Dashboard({ store }: { store: Store }) {
                   {inventoryForecast.summary.totalProducts === 0 && (
                     <div className="bg-white/5 rounded-lg p-4 mt-4">
                       <p className="text-white/60 text-sm mb-3">
-                        No inventory data available. Debug info:
+                        No inventory data available. Try syncing inventory from Shopify.
                       </p>
-                      {inventoryForecast.debug && (
-                        <ul className="text-white/50 text-xs space-y-1 mb-4 font-mono">
-                          <li>Store ID: {inventoryForecast.debug.storeId}</li>
-                          <li>Products in DB: {inventoryForecast.debug.totalProductsInDB}</li>
-                          <li>With inventory &gt; 0: {inventoryForecast.debug.productsWithInventory}</li>
-                          <li>With sales (30d): {inventoryForecast.debug.productsWithSales}</li>
-                          <li>Line items found: {inventoryForecast.debug.lineItemsFound}</li>
-                          {inventoryForecast.debug.productsError && <li className="text-red-400">Error: {inventoryForecast.debug.productsError}</li>}
-                        </ul>
-                      )}
                       <button
                         onClick={async () => {
                           try {
@@ -2571,8 +2560,7 @@ export default function Dashboard({ store }: { store: Store }) {
                             });
                             const result = await res.json();
                             if (res.ok) {
-                              const errInfo = result.errors?.length ? `\nErrors: ${result.errors.join(', ')}` : '';
-                              alert(`Synced ${result.synced} variants!\n\nMatching IDs: ${result.matchingIds}\nShopify variants: ${result.shopifyVariants}\nDB products: ${result.dbProducts}${errInfo}`);
+                              alert(`Synced ${result.synced} product variants!`);
                               // Refresh the forecast after sync
                               const forecastRes = await fetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
                               const data = await forecastRes.json();
