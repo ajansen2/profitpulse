@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   // Get products with inventory (stored per variant)
   const { data: products, error: productsError } = await supabase
     .from('products')
-    .select('shopify_product_id, shopify_variant_id, title, price, cost_per_item, inventory_quantity')
+    .select('shopify_product_id, shopify_variant_id, title, cost_per_item, inventory_quantity')
     .eq('store_id', storeId);
 
   console.log('[Inventory Forecast] store_id:', storeId, 'products found:', products?.length, 'error:', productsError?.message);
@@ -62,9 +62,11 @@ export async function GET(request: NextRequest) {
       const sales = salesData[variantId] || { totalSold: 0, totalProfit: 0 };
 
       const dailyVelocity = sales.totalSold / daysInPeriod;
+      // If we have sales data, use actual profit; otherwise estimate 30% margin
+      const costPerItem = product.cost_per_item || 0;
       const profitPerUnit = sales.totalSold > 0
         ? sales.totalProfit / sales.totalSold
-        : (product.price || 0) - (product.cost_per_item || 0);
+        : costPerItem * 0.43; // ~30% margin means profit is cost * 0.43
 
       const currentInventory = product.inventory_quantity || 0;
       const daysOfStock = dailyVelocity > 0 ? currentInventory / dailyVelocity : 999;
@@ -81,8 +83,7 @@ export async function GET(request: NextRequest) {
       return {
         productId: variantId,
         title: product.title,
-        currentPrice: product.price || 0,
-        costPerItem: product.cost_per_item || 0,
+        costPerItem: costPerItem,
         profitPerUnit,
         currentInventory,
         dailyVelocity,
