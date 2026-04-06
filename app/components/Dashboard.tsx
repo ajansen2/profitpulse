@@ -220,6 +220,7 @@ export default function Dashboard({ store }: { store: Store }) {
     summary: { totalProducts: number; totalProjectedProfit30d: number; totalOpportunityLost: number; criticalStockCount: number; lowStockCount: number };
     topOpportunities: { title: string; currentInventory: number; daysOfStock: number; additionalProfitPotential: number; stockStatus: string }[];
     atRiskProducts: { title: string; currentInventory: number; daysOfStock: number; dailyVelocity: number; stockStatus: string }[];
+    debug?: { totalProductsInDB: number; productsWithInventory: number; productsWithSales: number; lineItemsFound: number; sampleInventory: { title: string; qty: number }[] };
   } | null>(null);
   const [inventoryForecastLoading, setInventoryForecastLoading] = useState(false);
 
@@ -2543,13 +2544,17 @@ export default function Dashboard({ store }: { store: Store }) {
                   {inventoryForecast.summary.totalProducts === 0 && (
                     <div className="bg-white/5 rounded-lg p-4 mt-4">
                       <p className="text-white/60 text-sm mb-3">
-                        No inventory data available. This could be because:
+                        No inventory data available. Debug info:
                       </p>
-                      <ul className="text-white/50 text-sm space-y-1 mb-4 list-disc list-inside">
-                        <li>Products don&apos;t have inventory tracking enabled in Shopify</li>
-                        <li>Inventory hasn&apos;t been synced yet</li>
-                        <li>No sales in the last 30 days</li>
-                      </ul>
+                      {inventoryForecast.debug && (
+                        <ul className="text-white/50 text-xs space-y-1 mb-4 font-mono">
+                          <li>Products in DB: {inventoryForecast.debug.totalProductsInDB}</li>
+                          <li>With inventory &gt; 0: {inventoryForecast.debug.productsWithInventory}</li>
+                          <li>With sales (30d): {inventoryForecast.debug.productsWithSales}</li>
+                          <li>Line items found: {inventoryForecast.debug.lineItemsFound}</li>
+                          <li>Sample inventory: {JSON.stringify(inventoryForecast.debug.sampleInventory)}</li>
+                        </ul>
+                      )}
                       <button
                         onClick={async () => {
                           try {

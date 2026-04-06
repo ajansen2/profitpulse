@@ -112,6 +112,10 @@ export async function GET(request: NextRequest) {
     .filter(f => f.stockStatus === 'critical' || f.stockStatus === 'low')
     .slice(0, 5);
 
+  // Debug info
+  const productsWithInventory = (products || []).filter(p => (p.inventory_quantity || 0) > 0);
+  const productsWithSales = Object.keys(salesData).length;
+
   return NextResponse.json({
     summary: {
       totalProducts: forecasts.length,
@@ -123,5 +127,14 @@ export async function GET(request: NextRequest) {
     topOpportunities,
     atRiskProducts: atRisk,
     allForecasts: forecasts,
+    debug: {
+      totalProductsInDB: products?.length || 0,
+      productsWithInventory: productsWithInventory.length,
+      productsWithSales: productsWithSales,
+      lineItemsFound: lineItems?.length || 0,
+      sampleInventory: products?.slice(0, 3).map(p => ({ title: p.title, qty: p.inventory_quantity })),
+      sampleSalesVariantIds: Object.keys(salesData).slice(0, 3),
+      sampleProductVariantIds: products?.slice(0, 3).map(p => p.shopify_variant_id),
+    },
   });
 }
