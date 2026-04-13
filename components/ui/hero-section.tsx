@@ -90,8 +90,8 @@ export function HeroSection() {
                 loop
                 muted
                 playsInline
-                className="size-full object-cover opacity-20"
-                src="https://ik.imagekit.io/lrigu76hy/tailark/dna-video.mp4?updatedAt=1745736251477"
+                className="size-full object-cover opacity-40"
+                src="/videos/dna-video.mp4"
               ></video>
               <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/50 to-transparent"></div>
             </div>
