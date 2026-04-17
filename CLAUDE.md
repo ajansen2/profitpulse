@@ -156,9 +156,9 @@ CREATE TABLE IF NOT EXISTS share_links (
 
 ### Environment Variables for SMS
 ```
-TWILIO_ACCOUNT_SID=REDACTED_TWILIO_SID
-TWILIO_AUTH_TOKEN=REDACTED_TWILIO_TOKEN
-TWILIO_PHONE_NUMBER=REDACTED_PHONE
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_PHONE_NUMBER=your_twilio_phone_number
 ```
 
 ### Database Migration for SMS
