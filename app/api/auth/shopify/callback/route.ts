@@ -273,100 +273,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // No active subscription - create new one using GraphQL
-    console.log('💰 Creating subscription via GraphQL...');
-
-    const chargeResponse = await fetch(`https://${shop}/admin/api/2024-01/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': access_token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          mutation AppSubscriptionCreate($name: String!, $returnUrl: URL!, $trialDays: Int, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!) {
-            appSubscriptionCreate(
-              name: $name
-              returnUrl: $returnUrl
-              trialDays: $trialDays
-              test: $test
-              lineItems: $lineItems
-            ) {
-              appSubscription {
-                id
-                status
-              }
-              confirmationUrl
-              userErrors {
-                field
-                message
-              }
-            }
-          }
-        `,
-        variables: {
-          name: 'ProfitPulse Pro',
-          returnUrl: returnUrl,
-          trialDays: 7,
-          test: isTestStore,
-          lineItems: [
-            {
-              plan: {
-                appRecurringPricingDetails: {
-                  price: { amount: 29.99, currencyCode: 'USD' },
-                  interval: 'EVERY_30_DAYS',
-                },
-              },
-            },
-          ],
-        },
-      }),
-    });
-
-    const chargeData = await chargeResponse.json();
-    console.log('💰 GraphQL billing response:', JSON.stringify(chargeData, null, 2));
-
-    const confirmationUrl = chargeData.data?.appSubscriptionCreate?.confirmationUrl;
-    const userErrors = chargeData.data?.appSubscriptionCreate?.userErrors;
-
-    if (userErrors && userErrors.length > 0) {
-      console.error('❌ Billing user errors:', userErrors);
-
-      // Check if this is a Managed Pricing App
-      const isManagedPricing = userErrors.some((e: any) =>
-        e.message?.includes('Managed Pricing')
-      );
-
-      if (isManagedPricing) {
-        console.log('💰 Managed Pricing App - billing handled by Shopify, redirecting to app');
-        // For managed pricing apps, just redirect to the app - Shopify handles billing
-        const managedUrl = `https://admin.shopify.com/store/${shopName}/apps/${clientId}`;
-        const response = new NextResponse(
-          topLevelRedirectHTML(managedUrl, 'Loading ProfitPulse...'),
-          { status: 200, headers: { 'Content-Type': 'text/html' } }
-        );
-        response.cookies.delete('shopify_oauth_state');
-        response.cookies.delete('shopify_oauth_shop');
-        return response;
-      }
-    }
-
-    if (confirmationUrl) {
-      console.log('✅ Subscription created, redirecting to approval (top-level)');
-      const response = new NextResponse(
-        topLevelRedirectHTML(confirmationUrl, 'Redirecting to billing approval...'),
-        { status: 200, headers: { 'Content-Type': 'text/html' } }
-      );
-      response.cookies.delete('shopify_oauth_state');
-      response.cookies.delete('shopify_oauth_shop');
-      return response;
-    }
-
-    // Billing failed - redirect to app with billing_required flag so frontend shows a banner
-    console.error('❌ Billing creation failed - no confirmation URL');
-    const fallbackUrl = `https://admin.shopify.com/store/${shopName}/apps/${clientId}?billing_error=true&billing_required=true`;
+    // Merchants start on free tier — upgrade to Pro ($29.99/mo) from dashboard
+    console.log('📋 Install complete, redirecting to dashboard (free tier)');
+    const dashboardUrl = `https://admin.shopify.com/store/${shopName}/apps/${clientId}?shop=${shop}`;
     const response = new NextResponse(
-      topLevelRedirectHTML(fallbackUrl, 'Loading ProfitPulse...'),
+      topLevelRedirectHTML(dashboardUrl, 'Loading ProfitPulse...'),
       { status: 200, headers: { 'Content-Type': 'text/html' } }
     );
     response.cookies.delete('shopify_oauth_state');
