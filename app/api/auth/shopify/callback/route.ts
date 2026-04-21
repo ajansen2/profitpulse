@@ -122,6 +122,48 @@ export async function GET(request: NextRequest) {
 
     if (existingStore) {
       console.log('✅ Store exists, updating...');
+
+      // Before resetting to trial, check if the store has an active Shopify subscription.
+      // This prevents paying customers from being downgraded on reinstall.
+      let subscriptionStatus = 'trial';
+      let billingChargeId = existingStore.billing_charge_id;
+      try {
+        const subCheckResponse = await fetch(
+          `https://${shop}/admin/api/2024-01/graphql.json`,
+          {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': access_token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: `
+                query {
+                  currentAppInstallation {
+                    activeSubscriptions {
+                      id
+                      status
+                    }
+                  }
+                }
+              `,
+            }),
+          }
+        );
+        if (subCheckResponse.ok) {
+          const subCheckData = await subCheckResponse.json();
+          const activeSubs = subCheckData.data?.currentAppInstallation?.activeSubscriptions || [];
+          const activeSub = activeSubs.find((s: any) => s.status === 'ACTIVE');
+          if (activeSub) {
+            console.log('💰 Existing active subscription found on reinstall, preserving active status');
+            subscriptionStatus = 'active';
+            billingChargeId = activeSub.id;
+          }
+        }
+      } catch (e) {
+        console.log('⚠️ Failed to check existing subscriptions, defaulting to trial');
+      }
+
       // Update existing store
       const { data: updatedStore, error: updateError } = await supabase
         .from('stores')
@@ -132,8 +174,9 @@ export async function GET(request: NextRequest) {
           email: shopData.shop.email,
           currency: shopData.shop.currency,
           timezone: shopData.shop.iana_timezone,
-          subscription_status: 'trial',
-          trial_ends_at: trialEndsAt,
+          subscription_status: subscriptionStatus,
+          ...(subscriptionStatus === 'trial' ? { trial_ends_at: trialEndsAt } : {}),
+          ...(billingChargeId ? { billing_charge_id: billingChargeId } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingStore.id)

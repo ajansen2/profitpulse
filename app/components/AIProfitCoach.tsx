@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { createAuthenticatedFetch } from '@/lib/authenticated-fetch';
 
 interface Store {
   id: string;
   store_name: string;
+  shop_domain: string;
 }
 
 interface Insight {
@@ -28,6 +30,7 @@ interface AIProfitCoachProps {
 }
 
 export default function AIProfitCoach({ store, summary, topProducts }: AIProfitCoachProps) {
+  const authFetch = useMemo(() => createAuthenticatedFetch(store.shop_domain), [store.shop_domain]);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -35,7 +38,7 @@ export default function AIProfitCoach({ store, summary, topProducts }: AIProfitC
   const generateInsights = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/ai/insights', {
+      const res = await authFetch('/api/ai/insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStoreAccess } from '@/lib/verify-session';
 
 /**
  * Bulk update product costs
@@ -11,6 +12,10 @@ export async function POST(request: NextRequest) {
 
     if (!store_id || !type || value === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (!await verifyStoreAccess(request, store_id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createClient(

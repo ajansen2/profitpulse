@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { createAuthenticatedFetch } from '@/lib/authenticated-fetch';
 
 interface Store {
   id: string;
@@ -48,6 +49,7 @@ interface OrdersPageProps {
 type DateRangeOption = '7d' | '14d' | '30d' | '90d' | 'all';
 
 export default function OrdersPage({ store, onBack }: OrdersPageProps) {
+  const authFetch = useMemo(() => createAuthenticatedFetch(store.shop_domain), [store.shop_domain]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -94,7 +96,7 @@ export default function OrdersPage({ store, onBack }: OrdersPageProps) {
     setSyncSuccess(null);
     try {
       console.log('📦 Starting order sync for store:', store.id);
-      const res = await fetch('/api/orders/sync', {
+      const res = await authFetch('/api/orders/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ store_id: store.id })

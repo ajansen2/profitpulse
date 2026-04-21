@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthenticatedShop } from '@/lib/verify-session';
 
 /**
  * Store Lookup
@@ -10,6 +11,12 @@ export async function GET(request: NextRequest) {
 
   if (!shop) {
     return NextResponse.json({ error: 'Missing shop parameter' }, { status: 400 });
+  }
+
+  // Verify the caller is associated with this shop
+  const authenticatedShop = getAuthenticatedShop(request);
+  if (!authenticatedShop) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const supabase = createClient(

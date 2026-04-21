@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Toast, useToast } from './Toast';
+import { createAuthenticatedFetch } from '@/lib/authenticated-fetch';
 
 interface Store {
   id: string;
@@ -121,6 +122,7 @@ const SHOPIFY_PLANS = [
 ];
 
 export default function SettingsPage({ store, onBack, onExpenseChange }: SettingsPageProps) {
+  const authFetch = useMemo(() => createAuthenticatedFetch(store.shop_domain), [store.shop_domain]);
   const [settings, setSettings] = useState<StoreSettings>({
     default_cogs_percentage: 30,
     default_shipping_cost: 0,
@@ -198,7 +200,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
   const loadLinkedStores = async () => {
     setLoadingLinkedStores(true);
     try {
-      const res = await fetch(`/api/stores/linked?store_id=${store.id}`);
+      const res = await authFetch(`/api/stores/linked?store_id=${store.id}`);
       const data = await res.json();
       if (data.stores) {
         setLinkedStores(data.stores);
@@ -212,7 +214,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
 
   const loadAdSpend = async () => {
     try {
-      const res = await fetch(`/api/ad-spend?store_id=${store.id}&days=30`);
+      const res = await authFetch(`/api/ad-spend?store_id=${store.id}&days=30`);
       const data = await res.json();
       if (data.adSpend) {
         setAdSpend(data.adSpend);
@@ -226,7 +228,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
   const addAdSpend = async () => {
     if (!newAdSpend.spend || !newAdSpend.date) return;
     try {
-      const res = await fetch('/api/ad-spend', {
+      const res = await authFetch('/api/ad-spend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -247,7 +249,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
 
   const deleteAdSpend = async (id: string) => {
     try {
-      await fetch(`/api/ad-spend?id=${id}`, { method: 'DELETE' });
+      await authFetch(`/api/ad-spend?id=${id}`, { method: 'DELETE' });
       await loadAdSpend();
     } catch (err) {
       console.error('Error deleting ad spend:', err);
@@ -267,7 +269,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
 
   const loadExpenses = async () => {
     try {
-      const res = await fetch(`/api/expenses?store_id=${store.id}`);
+      const res = await authFetch(`/api/expenses?store_id=${store.id}`);
       const data = await res.json();
       if (data.expenses) {
         setExpenses(data.expenses);
@@ -280,7 +282,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
   const addExpense = async () => {
     if (!newExpense.name || !newExpense.amount) return;
     try {
-      const res = await fetch('/api/expenses', {
+      const res = await authFetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -303,7 +305,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
 
   const deleteExpense = async (id: string) => {
     try {
-      await fetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
+      await authFetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
       setExpenses(expenses.filter(e => e.id !== id));
       // Trigger dashboard refresh
       onExpenseChange?.();
@@ -327,7 +329,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/settings?store_id=${store.id}`);
+      const res = await authFetch(`/api/settings?store_id=${store.id}`);
       const data = await res.json();
       console.log('📖 Loaded settings from API:', data.settings);
 
@@ -360,7 +362,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
       const payload = { store_id: store.id, ...settings, dashboard_widgets: dashboardWidgets };
       console.log('💾 Saving settings:', payload);
 
-      const res = await fetch('/api/settings', {
+      const res = await authFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -393,7 +395,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
   const scanForHiddenFees = async () => {
     setScanningFees(true);
     try {
-      const res = await fetch(`/api/analytics/hidden-fees?store_id=${store.id}`);
+      const res = await authFetch(`/api/analytics/hidden-fees?store_id=${store.id}`);
       const data = await res.json();
       if (data.fees) {
         setHiddenFees(data.fees);
@@ -460,11 +462,11 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
     setExporting(true);
     try {
       // Fetch orders
-      const ordersRes = await fetch(`/api/orders?store_id=${store.id}&limit=10000`);
+      const ordersRes = await authFetch(`/api/orders?store_id=${store.id}&limit=10000`);
       const ordersData = await ordersRes.json();
 
       // Fetch products
-      const productsRes = await fetch(`/api/products?store_id=${store.id}`);
+      const productsRes = await authFetch(`/api/products?store_id=${store.id}`);
       const productsData = await productsRes.json();
 
       // Create orders CSV
@@ -525,7 +527,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
   const cancelSubscription = async () => {
     setCancelling(true);
     try {
-      const res = await fetch('/api/billing/cancel', {
+      const res = await authFetch('/api/billing/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -786,7 +788,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
                 onClick={async () => {
                   setSaving(true);
                   try {
-                    const res = await fetch('/api/products/sync', {
+                    const res = await authFetch('/api/products/sync', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ store_id: store.id }),
@@ -811,7 +813,7 @@ export default function SettingsPage({ store, onBack, onExpenseChange }: Setting
                 onClick={async () => {
                   setSaving(true);
                   try {
-                    const res = await fetch('/api/orders/sync', {
+                    const res = await authFetch('/api/orders/sync', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ store_id: store.id }),

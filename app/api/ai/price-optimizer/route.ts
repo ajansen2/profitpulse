@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
+import { verifyStoreAccess } from '@/lib/verify-session';
 
 const anthropic = new Anthropic();
 
@@ -14,6 +15,10 @@ export async function GET(request: NextRequest) {
 
   if (!storeId) {
     return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
+  }
+
+  if (!await verifyStoreAccess(request, storeId)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const supabase = createClient(

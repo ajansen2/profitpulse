@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStoreAccess } from '@/lib/verify-session';
 
 /**
  * Push Notification Subscription API
@@ -12,6 +13,10 @@ export async function POST(request: NextRequest) {
 
     if (!store_id || !subscription) {
       return NextResponse.json({ error: 'Missing store_id or subscription' }, { status: 400 });
+    }
+
+    if (!await verifyStoreAccess(request, store_id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createClient(
@@ -50,6 +55,10 @@ export async function DELETE(request: NextRequest) {
 
     if (!store_id || !endpoint) {
       return NextResponse.json({ error: 'Missing store_id or endpoint' }, { status: 400 });
+    }
+
+    if (!await verifyStoreAccess(request, store_id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createClient(

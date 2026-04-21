@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
+import { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Image from 'next/image';
+import { createAuthenticatedFetch } from '@/lib/authenticated-fetch';
 
 // Lazy load heavy components to improve initial page load
 const ProductsPage = lazy(() => import('./ProductsPage'));
@@ -170,6 +171,9 @@ function PageLoadingSpinner() {
 }
 
 export default function Dashboard({ store }: { store: Store }) {
+  // Authenticated fetch that injects x-shop-domain and session token headers
+  const authFetch = useMemo(() => createAuthenticatedFetch(store.shop_domain), [store.shop_domain]);
+
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dateRangeOption, setDateRangeOption] = useState<DateRangeOption>('30d');
@@ -287,7 +291,7 @@ export default function Dashboard({ store }: { store: Store }) {
     if (!store) return;
     setSubscribing(true);
     try {
-      const response = await fetch('/api/billing/create', {
+      const response = await authFetch('/api/billing/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
@@ -306,7 +310,7 @@ export default function Dashboard({ store }: { store: Store }) {
         const refreshed = await tryRefreshToken();
         if (refreshed) {
           // Token refreshed - retry billing
-          const retryResponse = await fetch('/api/billing/create', {
+          const retryResponse = await authFetch('/api/billing/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
@@ -369,7 +373,7 @@ export default function Dashboard({ store }: { store: Store }) {
         try {
           // Sync products first
           setSyncProgress('Syncing products...');
-          await fetch('/api/products/sync', {
+          await authFetch('/api/products/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ store_id: store.id }),
@@ -377,7 +381,7 @@ export default function Dashboard({ store }: { store: Store }) {
 
           // Then sync orders
           setSyncProgress('Syncing orders (this may take a moment)...');
-          const orderRes = await fetch('/api/orders/sync', {
+          const orderRes = await authFetch('/api/orders/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ store_id: store.id }),
@@ -417,7 +421,7 @@ export default function Dashboard({ store }: { store: Store }) {
 
       // Also save to database (persistent)
       try {
-        await fetch('/api/settings', {
+        await authFetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ store_id: store.id, onboarding_completed: true }),
@@ -441,8 +445,8 @@ export default function Dashboard({ store }: { store: Store }) {
       try {
         // Fetch analytics and settings in parallel for better performance
         const [analyticsRes, settingsRes] = await Promise.all([
-          fetch(`/api/analytics/summary?store_id=${store.id}&days=${dateRange.days}`),
-          fetch(`/api/settings?store_id=${store.id}`),
+          authFetch(`/api/analytics/summary?store_id=${store.id}&days=${dateRange.days}`),
+          authFetch(`/api/settings?store_id=${store.id}`),
         ]);
 
         // Handle settings (profit goals + dashboard widgets + onboarding)
@@ -565,7 +569,7 @@ export default function Dashboard({ store }: { store: Store }) {
   // Refresh settings (dashboard widgets, profit goals) from API
   const refreshSettings = async () => {
     try {
-      const res = await fetch(`/api/settings?store_id=${store.id}`);
+      const res = await authFetch(`/api/settings?store_id=${store.id}`);
       if (res.ok) {
         const data = await res.json();
         if (data.settings) {
@@ -1130,7 +1134,7 @@ export default function Dashboard({ store }: { store: Store }) {
                   console.log('Store ID:', store.id);
                   console.log('Shop domain:', store.shop_domain);
                   try {
-                    const response = await fetch('/api/billing/create', {
+                    const response = await authFetch('/api/billing/create', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
@@ -1150,7 +1154,7 @@ export default function Dashboard({ store }: { store: Store }) {
                       const refreshed = await tryRefreshToken();
                       if (refreshed) {
                         console.log('Token refreshed - retrying billing');
-                        const retryResponse = await fetch('/api/billing/create', {
+                        const retryResponse = await authFetch('/api/billing/create', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ storeId: store.id, shop: store.shop_domain })
@@ -1571,7 +1575,7 @@ export default function Dashboard({ store }: { store: Store }) {
                       setForecastLoading(true);
                       setForecastError(null);
                       try {
-                        const res = await fetch('/api/analytics/forecast', {
+                        const res = await authFetch('/api/analytics/forecast', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ store_id: store.id, days: 7 }),
@@ -2369,7 +2373,7 @@ export default function Dashboard({ store }: { store: Store }) {
                   onClick={async () => {
                     setPriceOptimizerLoading(true);
                     try {
-                      const res = await fetch(`/api/ai/price-optimizer?store_id=${store.id}`);
+                      const res = await authFetch(`/api/ai/price-optimizer?store_id=${store.id}`);
                       const data = await res.json();
                       setPriceOptimizer(data);
                     } catch (err) {
@@ -2454,7 +2458,7 @@ export default function Dashboard({ store }: { store: Store }) {
                   onClick={async () => {
                     setInventoryForecastLoading(true);
                     try {
-                      const res = await fetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
+                      const res = await authFetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
                       const data = await res.json();
                       setInventoryForecast(data);
                     } catch (err) {
@@ -2553,7 +2557,7 @@ export default function Dashboard({ store }: { store: Store }) {
                       <button
                         onClick={async () => {
                           try {
-                            const res = await fetch('/api/inventory/sync', {
+                            const res = await authFetch('/api/inventory/sync', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ store_id: store.id }),
@@ -2562,7 +2566,7 @@ export default function Dashboard({ store }: { store: Store }) {
                             if (res.ok) {
                               alert(`Synced ${result.synced} product variants!`);
                               // Refresh the forecast after sync
-                              const forecastRes = await fetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
+                              const forecastRes = await authFetch(`/api/analytics/inventory-forecast?store_id=${store.id}`);
                               const data = await forecastRes.json();
                               setInventoryForecast(data);
                             } else {

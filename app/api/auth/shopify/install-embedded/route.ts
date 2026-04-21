@@ -40,9 +40,70 @@ export async function POST(request: NextRequest) {
     if (existingStore) {
       console.log('✅ Store already exists:', existingStore.id);
 
-      // If store was cancelled/uninstalled, reactivate trial
+      // If store was cancelled/uninstalled, check for active subscription before resetting to trial
       if (existingStore.subscription_status === 'cancelled' || existingStore.access_token === 'revoked') {
-        console.log('🔄 Reactivating store trial');
+        console.log('🔄 Store was cancelled/revoked, checking for active subscription...');
+
+        // Check if store has an active Shopify subscription (paying customer reinstalling)
+        let hasActiveSubscription = false;
+        if (existingStore.access_token && existingStore.access_token !== 'revoked') {
+          try {
+            const subCheckResponse = await fetch(
+              `https://${shop}/admin/api/2024-01/graphql.json`,
+              {
+                method: 'POST',
+                headers: {
+                  'X-Shopify-Access-Token': existingStore.access_token,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  query: `
+                    query {
+                      currentAppInstallation {
+                        activeSubscriptions {
+                          id
+                          status
+                        }
+                      }
+                    }
+                  `,
+                }),
+              }
+            );
+            if (subCheckResponse.ok) {
+              const subCheckData = await subCheckResponse.json();
+              const activeSubs = subCheckData.data?.currentAppInstallation?.activeSubscriptions || [];
+              const activeSub = activeSubs.find((s: any) => s.status === 'ACTIVE');
+              if (activeSub) {
+                console.log('💰 Active subscription found, restoring active status');
+                hasActiveSubscription = true;
+                await supabase
+                  .from('stores')
+                  .update({
+                    subscription_status: 'active',
+                    billing_charge_id: activeSub.id,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', existingStore.id);
+
+                return NextResponse.json({
+                  store: {
+                    id: existingStore.id,
+                    store_name: existingStore.store_name || shop.replace('.myshopify.com', ''),
+                    shop_domain: shop,
+                    email: existingStore.email || '',
+                    subscription_status: 'active',
+                  }
+                });
+              }
+            }
+          } catch (e) {
+            console.log('⚠️ Could not check subscriptions, defaulting to trial');
+          }
+        }
+
+        // No active subscription found — set to trial
+        console.log('🔄 No active subscription, reactivating as trial');
         const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         await supabase
           .from('stores')

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStoreAccess } from '@/lib/verify-session';
 
 /**
  * Store Settings API
@@ -12,6 +13,10 @@ export async function GET(request: NextRequest) {
 
   if (!storeId) {
     return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
+  }
+
+  if (!await verifyStoreAccess(request, storeId)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const supabase = createClient(
@@ -70,6 +75,10 @@ export async function POST(request: NextRequest) {
 
     if (!store_id) {
       return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
+    }
+
+    if (!await verifyStoreAccess(request, store_id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createClient(

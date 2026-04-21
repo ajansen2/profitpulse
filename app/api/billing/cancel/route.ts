@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthenticatedShop } from '@/lib/verify-session';
 
 /**
  * Cancel Subscription
@@ -14,6 +15,11 @@ export async function POST(request: NextRequest) {
 
     if (!storeId || !shop) {
       return NextResponse.json({ error: 'Missing storeId or shop' }, { status: 400 });
+    }
+
+    const authenticatedShop = getAuthenticatedShop(request);
+    if (!authenticatedShop) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createClient(

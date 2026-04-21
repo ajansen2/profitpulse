@@ -4,6 +4,27 @@ import { createClient } from '@supabase/supabase-js';
 // ProfitPulse API key fallback
 const getApiKey = () => process.env.SHOPIFY_API_KEY!;
 
+/**
+ * Returns an HTML page that redirects window.top (breaks out of Shopify iframe).
+ */
+function topLevelRedirectHTML(url: string, message: string = 'Redirecting...'): string {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><title>${message}</title>
+<style>body{background:#0a0a0a;color:white;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.loader{text-align:center}.spinner{width:40px;height:40px;border:3px solid #333;border-top:3px solid #8b5cf6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}</style>
+</head>
+<body><div class="loader"><div class="spinner"></div><p>${message}</p></div>
+<script>if(window.top&&window.top!==window.self){window.top.location.href=${JSON.stringify(url)}}else{window.location.href=${JSON.stringify(url)}}</script>
+</body></html>`;
+}
+
+function htmlRedirect(url: string, message: string = 'Redirecting...') {
+  return new NextResponse(
+    topLevelRedirectHTML(url, message),
+    { status: 200, headers: { 'Content-Type': 'text/html' } }
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const shop = request.nextUrl.searchParams.get('shop');
@@ -16,7 +37,7 @@ export async function GET(request: NextRequest) {
     const redirectUrl = `https://admin.shopify.com/store/${shopName}/apps/${getApiKey()}`;
 
     if (!shop || !chargeId) {
-      return NextResponse.redirect(`${redirectUrl}?billing=error`);
+      return htmlRedirect(`${redirectUrl}?billing=error`, 'Billing error...');
     }
 
     const supabase = createClient(
@@ -33,87 +54,81 @@ export async function GET(request: NextRequest) {
 
     if (!store) {
       console.error('❌ Store not found:', shop);
-      return NextResponse.redirect(`${redirectUrl}?billing=error`);
+      return htmlRedirect(`${redirectUrl}?billing=error`, 'Billing error...');
     }
 
-    // Verify charge status with Shopify
-    const chargeResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/recurring_application_charges/${chargeId}.json`,
+    // Verify subscription status via GraphQL (REST recurring_application_charges is deprecated)
+    // With appSubscriptionCreate (GraphQL), Shopify auto-activates when merchant approves —
+    // no separate activation call needed. Just confirm the subscription is active.
+    const graphqlResponse = await fetch(
+      `https://${shop}/admin/api/2024-01/graphql.json`,
       {
+        method: 'POST',
         headers: {
           'X-Shopify-Access-Token': store.access_token,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          query: `
+            query {
+              currentAppInstallation {
+                activeSubscriptions {
+                  id
+                  name
+                  status
+                }
+              }
+            }
+          `,
+        }),
       }
     );
 
-    if (!chargeResponse.ok) {
-      console.error('❌ Failed to fetch charge:', chargeResponse.status);
-      return NextResponse.redirect(`${redirectUrl}?billing=error`);
+    if (!graphqlResponse.ok) {
+      console.error('❌ Failed to query subscriptions:', graphqlResponse.status);
+      return htmlRedirect(`${redirectUrl}?billing=error`, 'Billing error...');
     }
 
-    const chargeData = await chargeResponse.json();
-    const charge = chargeData.recurring_application_charge;
+    const graphqlData = await graphqlResponse.json();
+    const activeSubscriptions = graphqlData.data?.currentAppInstallation?.activeSubscriptions || [];
 
-    console.log('📋 Charge status:', charge.status);
+    console.log('📋 Active subscriptions:', activeSubscriptions.length, activeSubscriptions);
 
-    if (charge.status === 'accepted') {
-      // Activate the charge
-      const activateResponse = await fetch(
-        `https://${shop}/admin/api/2024-01/recurring_application_charges/${chargeId}/activate.json`,
-        {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': store.access_token,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+    const activeSub = activeSubscriptions.find((s: any) => s.status === 'ACTIVE');
 
-      if (activateResponse.ok) {
-        // Update store subscription status
-        await supabase
-          .from('stores')
-          .update({
-            subscription_status: 'active',
-            billing_charge_id: chargeId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('shop_domain', shop);
-
-        console.log('✅ Subscription activated for:', shop);
-        return NextResponse.redirect(`${redirectUrl}?billing=success`);
-      }
-    } else if (charge.status === 'active') {
-      // Already active (test charges)
+    if (activeSub) {
+      // Subscription is active — update store and redirect
       await supabase
         .from('stores')
         .update({
           subscription_status: 'active',
-          billing_charge_id: chargeId,
+          billing_charge_id: activeSub.id,
           updated_at: new Date().toISOString(),
         })
         .eq('shop_domain', shop);
 
-      console.log('✅ Subscription already active for:', shop);
-      return NextResponse.redirect(`${redirectUrl}?billing=success`);
-    } else if (charge.status === 'declined') {
-      await supabase
-        .from('stores')
-        .update({
-          subscription_status: 'cancelled',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('shop_domain', shop);
-
-      console.log('❌ Subscription declined for:', shop);
-      return NextResponse.redirect(`${redirectUrl}?billing=declined`);
+      console.log('✅ Subscription confirmed active for:', shop);
+      return htmlRedirect(`${redirectUrl}?billing=success`, 'Loading ProfitPulse...');
     }
 
-    return NextResponse.redirect(`${redirectUrl}?billing=pending`);
+    // No active subscription found — merchant likely declined
+    console.log('❌ No active subscription found after billing callback for:', shop);
+    await supabase
+      .from('stores')
+      .update({
+        subscription_status: 'cancelled',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('shop_domain', shop);
+
+    return htmlRedirect(`${redirectUrl}?billing=declined`, 'Loading ProfitPulse...');
   } catch (error) {
     console.error('Billing callback error:', error);
     const shop = request.nextUrl.searchParams.get('shop');
     const shopName = shop?.replace('.myshopify.com', '') || '';
-    return NextResponse.redirect(`https://admin.shopify.com/store/${shopName}/apps/${getApiKey()}?billing=error`);
+    return htmlRedirect(
+      `https://admin.shopify.com/store/${shopName}/apps/${getApiKey()}?billing=error`,
+      'Billing error...'
+    );
   }
 }

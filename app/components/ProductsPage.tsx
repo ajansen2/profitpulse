@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { Toast, useToast } from './Toast';
+import { createAuthenticatedFetch } from '@/lib/authenticated-fetch';
 
 interface Store {
   id: string;
@@ -32,6 +33,7 @@ interface ProductsPageProps {
 }
 
 export default function ProductsPage({ store, onBack }: ProductsPageProps) {
+  const authFetch = useMemo(() => createAuthenticatedFetch(store.shop_domain), [store.shop_domain]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -57,7 +59,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/products?store_id=${store.id}`);
+      const res = await authFetch(`/api/products?store_id=${store.id}`);
       const data = await res.json();
       if (data.products) {
         // Calculate profit scores
@@ -108,7 +110,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const syncProducts = async () => {
     setSyncing(true);
     try {
-      const res = await fetch('/api/products/sync', {
+      const res = await authFetch('/api/products/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ store_id: store.id })
@@ -127,7 +129,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const updateProductCost = async (productId: string, field: string, value: number) => {
     setSaving(true);
     try {
-      await fetch(`/api/products/${productId}`, {
+      await authFetch(`/api/products/${productId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: value })
@@ -146,7 +148,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
   const applyBulkCogs = async (type: 'percentage' | 'fixed', value: number) => {
     setSaving(true);
     try {
-      await fetch('/api/products/bulk-update', {
+      await authFetch('/api/products/bulk-update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -157,7 +159,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
       });
       await loadProducts();
       // Re-sync orders to recalculate profits with new COGS
-      await fetch('/api/orders/sync', {
+      await authFetch('/api/orders/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ store_id: store.id })
@@ -190,7 +192,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
         const product = products.find(p => p.id === id);
         const newCost = parseFloat(cost) || 0;
         if (product && product.cost_per_item !== newCost) {
-          return fetch(`/api/products/${id}`, {
+          return authFetch(`/api/products/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ cost_per_item: newCost })
@@ -203,7 +205,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
       await loadProducts();
 
       // Re-sync orders to recalculate profits
-      await fetch('/api/orders/sync', {
+      await authFetch('/api/orders/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ store_id: store.id })
@@ -237,7 +239,7 @@ export default function ProductsPage({ store, onBack }: ProductsPageProps) {
       }
 
       try {
-        const res = await fetch('/api/products/import-csv', {
+        const res = await authFetch('/api/products/import-csv', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ store_id: store.id, updates })

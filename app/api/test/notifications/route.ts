@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendSMS, formatDailyDigestSMS } from '@/lib/twilio';
 import { sendSlackDailyDigest, sendDiscordDailyDigest } from '@/lib/webhooks';
+import { verifyStoreAccess } from '@/lib/verify-session';
 
 /**
  * Test Notifications API
@@ -17,6 +18,10 @@ export async function POST(request: NextRequest) {
 
     if (!store_id) {
       return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
+    }
+
+    if (!await verifyStoreAccess(request, store_id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createClient(

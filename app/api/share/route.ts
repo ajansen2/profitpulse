@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { randomBytes } from 'crypto';
+import { verifyStoreAccess } from '@/lib/verify-session';
 
 /**
  * Share Links API
@@ -13,6 +14,10 @@ export async function GET(request: NextRequest) {
 
   if (!storeId) {
     return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
+  }
+
+  if (!await verifyStoreAccess(request, storeId)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const supabase = createClient(
@@ -48,6 +53,10 @@ export async function POST(request: NextRequest) {
 
     if (!store_id) {
       return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
+    }
+
+    if (!await verifyStoreAccess(request, store_id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createClient(
@@ -109,6 +118,10 @@ export async function DELETE(request: NextRequest) {
 
     if (!store_id || !link_id) {
       return NextResponse.json({ error: 'Missing store_id or link_id' }, { status: 400 });
+    }
+
+    if (!await verifyStoreAccess(request, store_id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createClient(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStoreAccess } from '@/lib/verify-session';
 
 /**
  * CSV Export API
@@ -12,6 +13,10 @@ export async function GET(request: NextRequest) {
 
   if (!storeId) {
     return NextResponse.json({ error: 'Missing store_id' }, { status: 400 });
+  }
+
+  if (!await verifyStoreAccess(request, storeId)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   if (!exportType || !['orders', 'products', 'analytics'].includes(exportType)) {
