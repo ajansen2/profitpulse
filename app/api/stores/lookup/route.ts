@@ -13,8 +13,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing shop parameter' }, { status: 400 });
   }
 
-  // Verify the caller is associated with this shop
-  const authenticatedShop = getAuthenticatedShop(request);
+  // Allow unsigned shop param — called during initial iframe load before session token
+  // is available. Returns non-sensitive store metadata only.
+  const authenticatedShop = getAuthenticatedShop(request, true);
   if (!authenticatedShop) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

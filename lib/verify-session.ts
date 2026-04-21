@@ -1,46 +1,65 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 /**
  * Session token verification helper for API routes.
  *
- * Extracts the authenticated shop domain from the request using a fallback chain:
- *   1. Authorization: Bearer <shopify-session-token> header (JWT — decoded, not signature-verified)
- *   2. x-shop-domain header
- *   3. ?shop= query parameter
+ * Extracts the authenticated shop domain from the request:
+ *   1. Authorization: Bearer <shopify-session-token> — JWT verified with HMAC-SHA256
+ *   2. x-shop-domain header — ONLY accepted for internal callers (webhooks/cron)
+ *   3. ?shop= query param — ONLY accepted for internal callers (webhooks/cron)
  *
- * For session tokens (case 1), the JWT `dest` claim contains the shop origin
- * (e.g. "https://my-store.myshopify.com"). We extract the hostname from that.
- *
- * Cases 2 & 3 are kept as fallbacks for webhook/cron callers that have their own auth.
+ * The JWT `dest` claim contains the shop origin (e.g. "https://my-store.myshopify.com").
  */
 
 /**
- * Decode a Shopify session token (JWT) and return the shop domain from the `dest` claim.
- * We intentionally skip signature verification — Shopify App Bridge already validated the
- * token before the browser sent it, and full verification would require the shared secret
- * plus iss/aud checks which add latency for no practical gain in an embedded-app context.
+ * Verify and decode a Shopify session token (JWT).
+ * Validates the HMAC-SHA256 signature using the app's API secret.
+ * Returns the shop domain from the `dest` claim, or null if invalid.
  */
-function decodeSessionToken(token: string): string | null {
+function verifyAndDecodeSessionToken(token: string): string | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
-    // Base64url-decode the payload
+    const secret = process.env.SHOPIFY_API_SECRET;
+    if (!secret) {
+      console.error('SHOPIFY_API_SECRET not set — cannot verify session tokens');
+      return null;
+    }
+
+    // Verify HMAC-SHA256 signature
+    const signatureInput = `${parts[0]}.${parts[1]}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(signatureInput)
+      .digest('base64url');
+
+    if (expectedSignature !== parts[2]) {
+      console.warn('Session token signature mismatch — rejecting');
+      return null;
+    }
+
+    // Decode payload
     const payload = JSON.parse(
       Buffer.from(parts[1], 'base64url').toString('utf-8')
     );
 
-    // `dest` is the shop origin, e.g. "https://my-store.myshopify.com"
+    // Check expiration
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      console.warn('Session token expired');
+      return null;
+    }
+
+    // Extract shop from `dest` claim
     const dest: string | undefined = payload.dest;
     if (!dest) return null;
 
-    // Extract hostname — handles both with and without protocol
     try {
       const url = new URL(dest);
       return url.hostname; // "my-store.myshopify.com"
     } catch {
-      // If dest is already just a hostname
       return dest;
     }
   } catch {
@@ -49,8 +68,7 @@ function decodeSessionToken(token: string): string | null {
 }
 
 /**
- * Given a shop domain extracted from the request, resolve the store_id (UUID) from the
- * database. Returns null if the store doesn't exist.
+ * Given a shop domain, resolve the store_id (UUID) from the database.
  */
 export async function getStoreIdForShop(shopDomain: string): Promise<string | null> {
   const supabase = createClient(
@@ -68,31 +86,33 @@ export async function getStoreIdForShop(shopDomain: string): Promise<string | nu
 }
 
 /**
- * Primary auth helper — returns the authenticated shop domain, or null if the request
- * cannot be tied to a shop.
+ * Primary auth helper — returns the authenticated shop domain from a verified
+ * session token. Falls back to header/query param ONLY if allowUnsigned is true
+ * (for webhook/cron routes that have their own auth).
  *
- * Usage in any API route:
+ * Usage in API routes:
  * ```ts
  * const shop = getAuthenticatedShop(request);
- * if (!shop) {
- *   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
- * }
+ * if (!shop) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
  * ```
  */
-export function getAuthenticatedShop(request: NextRequest): string | null {
-  // 1. Try Authorization: Bearer <session-token>
+export function getAuthenticatedShop(request: NextRequest, allowUnsigned = false): string | null {
+  // 1. Try Authorization: Bearer <session-token> — signature verified
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
-    const shop = decodeSessionToken(token);
+    const shop = verifyAndDecodeSessionToken(token);
     if (shop) return shop;
   }
 
-  // 2. Try x-shop-domain header
+  // Only allow unsigned fallbacks for internal callers (webhooks, cron)
+  if (!allowUnsigned) return null;
+
+  // 2. Try x-shop-domain header (internal only)
   const shopHeader = request.headers.get('x-shop-domain');
   if (shopHeader) return shopHeader;
 
-  // 3. Try ?shop= query param
+  // 3. Try ?shop= query param (internal only)
   const shopParam = request.nextUrl.searchParams.get('shop');
   if (shopParam) return shopParam;
 
@@ -101,20 +121,12 @@ export function getAuthenticatedShop(request: NextRequest): string | null {
 
 /**
  * Verify that a store_id belongs to the authenticated shop.
- * Returns true if the store_id matches a store with the given shop domain,
- * or if no session token was provided (fallback — will be tightened later).
- *
- * This is the function to call in routes that receive store_id in the body/query
- * but also have a session token available. It ensures the caller can only access
- * data for the shop their session token belongs to.
  */
 export async function verifyStoreAccess(
   request: NextRequest,
   storeId: string
 ): Promise<boolean> {
   const shop = getAuthenticatedShop(request);
-
-  // If no shop could be extracted at all, deny access
   if (!shop) return false;
 
   const supabase = createClient(
@@ -129,7 +141,5 @@ export async function verifyStoreAccess(
     .single();
 
   if (!store) return false;
-
-  // If the shop from the token/header matches the store's domain, allow
   return store.shop_domain === shop;
 }

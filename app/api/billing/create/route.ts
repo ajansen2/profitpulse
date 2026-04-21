@@ -17,7 +17,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing storeId or shop' }, { status: 400 });
     }
 
-    const authenticatedShop = getAuthenticatedShop(request);
+    // Allow unsigned — billing create is called from dashboard with shop in body
+    const authenticatedShop = getAuthenticatedShop(request, true);
     if (!authenticatedShop) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

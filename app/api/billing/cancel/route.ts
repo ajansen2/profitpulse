@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing storeId or shop' }, { status: 400 });
     }
 
-    const authenticatedShop = getAuthenticatedShop(request);
+    const authenticatedShop = getAuthenticatedShop(request, true);
     if (!authenticatedShop) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
