@@ -60,7 +60,7 @@ export function initializeAppBridge() {
       }
 
       appBridge = window.shopify.createApp({
-        apiKey: process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || '8d2e3d5d49c8c9253a5781ae3e8a02da',
+        apiKey: process.env.NEXT_PUBLIC_SHOPIFY_API_KEY,
         host: host,
         forceRedirect: false,
       });
@@ -99,7 +99,7 @@ export function redirectToShopifyAdmin(shop: string): boolean {
   const isEmbedded = window.self !== window.top;
   if (isEmbedded) return false;
 
-  const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || '8d2e3d5d49c8c9253a5781ae3e8a02da';
+  const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
   const storeName = shop.replace('.myshopify.com', '');
   const adminUrl = `https://admin.shopify.com/store/${storeName}/apps/${apiKey}`;
 

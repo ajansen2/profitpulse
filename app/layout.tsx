@@ -24,7 +24,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || '8d2e3d5d49c8c9253a5781ae3e8a02da';
+  const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
 
   return (
     <html lang="en">

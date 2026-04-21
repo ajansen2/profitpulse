@@ -5,7 +5,14 @@ import { createClient } from '@supabase/supabase-js';
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
-  // Skip for auth routes, webhooks, billing callbacks, cron jobs, and static files
+  // Add CSP headers for Shopify embedded app iframe
+  const response = NextResponse.next();
+  response.headers.set(
+    'Content-Security-Policy',
+    "frame-ancestors https://*.myshopify.com https://admin.shopify.com;"
+  );
+
+  // Skip subscription check for auth routes, webhooks, billing callbacks, cron jobs, and static files
   if (
     path.startsWith('/api/auth') ||
     path.startsWith('/api/webhooks') ||
@@ -14,9 +21,11 @@ export async function middleware(request: NextRequest) {
     path === '/' ||
     path.startsWith('/_next') ||
     path.startsWith('/favicon') ||
-    path === '/billing-required'
+    path === '/billing-required' ||
+    path === '/privacy' ||
+    path === '/terms'
   ) {
-    return NextResponse.next();
+    return response;
   }
 
   // Get shop from query params or headers
@@ -48,11 +57,12 @@ export async function middleware(request: NextRequest) {
     }
 
     const isActive = store.subscription_status === 'active';
+    const isFree = store.subscription_status === 'free' || !store.subscription_status;
     const isTrialValid = store.subscription_status === 'trial' &&
       store.trial_ends_at &&
       new Date(store.trial_ends_at) > new Date();
 
-    if (!isActive && !isTrialValid) {
+    if (!isActive && !isFree && !isTrialValid) {
       // Subscription not valid - redirect to billing required page
       console.log('Middleware: Billing required for', shop, '- status:', store.subscription_status);
       const billingUrl = new URL('/billing-required', request.url);
@@ -66,12 +76,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(billingUrl);
     }
 
-    // Valid subscription - allow access
-    return NextResponse.next();
+    // Valid subscription - allow access with CSP headers
+    return response;
   } catch (error) {
     console.error('Middleware error:', error);
-    // On error, let the request through and let the page handle it
-    return NextResponse.next();
+    return response;
   }
 }
 

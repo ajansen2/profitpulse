@@ -58,6 +58,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
     }
 
+    // Validate state parameter (CSRF protection)
+    const state = searchParams.get('state');
+    const storedState = request.cookies.get('shopify_oauth_state')?.value;
+    if (storedState && state && state !== storedState) {
+      console.error('❌ State mismatch — possible CSRF');
+      return NextResponse.json({ error: 'Invalid state parameter' }, { status: 403 });
+    }
+
     console.log('✅ HMAC validated');
 
     // Exchange code for access token

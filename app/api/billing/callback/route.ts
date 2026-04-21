@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // ProfitPulse API key fallback
-const getApiKey = () => process.env.SHOPIFY_API_KEY || '8d2e3d5d49c8c9253a5781ae3e8a02da';
+const getApiKey = () => process.env.SHOPIFY_API_KEY!;
 
 export async function GET(request: NextRequest) {
   try {
