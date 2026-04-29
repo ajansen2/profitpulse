@@ -114,17 +114,26 @@ export async function GET(request: NextRequest) {
 async function checkExistingCharge(store: any): Promise<'active' | 'pending' | 'none'> {
   try {
     const response = await fetch(
-      `https://${store.shop_domain}/admin/api/2024-01/recurring_application_charges.json`,
-      { headers: { 'X-Shopify-Access-Token': store.access_token } }
+      `https://${store.shop_domain}/admin/api/2025-10/graphql.json`,
+      {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': store.access_token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `query { currentAppInstallation { activeSubscriptions { id status } } }`,
+        }),
+      }
     );
 
     if (!response.ok) return 'none';
 
     const data = await response.json();
-    const charges = data.recurring_application_charges || [];
+    const subs = data.data?.currentAppInstallation?.activeSubscriptions || [];
 
-    if (charges.find((c: any) => c.status === 'active')) return 'active';
-    if (charges.find((c: any) => c.status === 'pending')) return 'pending';
+    if (subs.find((s: any) => s.status === 'ACTIVE')) return 'active';
+    if (subs.find((s: any) => s.status === 'PENDING')) return 'pending';
 
     return 'none';
   } catch {
@@ -139,7 +148,7 @@ async function createBillingCharge(store: any): Promise<boolean> {
     const returnUrl = `${appUrl}/api/billing/callback?shop=${store.shop_domain}&store_id=${store.id}`;
 
     const response = await fetch(
-      `https://${store.shop_domain}/admin/api/2024-01/recurring_application_charges.json`,
+      `https://${store.shop_domain}/admin/api/2025-10/graphql.json`,
       {
         method: 'POST',
         headers: {
@@ -147,17 +156,35 @@ async function createBillingCharge(store: any): Promise<boolean> {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          recurring_application_charge: {
-            name: 'ProfitPulse - Pro Plan',
-            price: 99.00,
-            return_url: returnUrl,
-            ...(isTestStore && { test: true }),
-          }
-        })
+          query: `
+            mutation AppSubscriptionCreate($name: String!, $returnUrl: URL!, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!) {
+              appSubscriptionCreate(name: $name, returnUrl: $returnUrl, test: $test, lineItems: $lineItems) {
+                appSubscription { id status }
+                confirmationUrl
+                userErrors { field message }
+              }
+            }
+          `,
+          variables: {
+            name: 'ProfitPulse Pro',
+            returnUrl,
+            test: isTestStore,
+            lineItems: [{
+              plan: {
+                appRecurringPricingDetails: {
+                  price: { amount: 29.99, currencyCode: 'USD' },
+                  interval: 'EVERY_30_DAYS',
+                },
+              },
+            }],
+          },
+        }),
       }
     );
 
-    return response.ok;
+    if (!response.ok) return false;
+    const data = await response.json();
+    return !!data.data?.appSubscriptionCreate?.confirmationUrl;
   } catch {
     return false;
   }

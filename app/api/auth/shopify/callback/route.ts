@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     console.log('✅ Got access token, length:', access_token?.length, 'scope:', scope);
 
     // Get shop info
-    const shopResponse = await fetch(`https://${shop}/admin/api/2024-01/shop.json`, {
+    const shopResponse = await fetch(`https://${shop}/admin/api/2025-10/shop.json`, {
       headers: { 'X-Shopify-Access-Token': access_token },
     });
 
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       let billingChargeId = existingStore.billing_charge_id;
       try {
         const subCheckResponse = await fetch(
-          `https://${shop}/admin/api/2024-01/graphql.json`,
+          `https://${shop}/admin/api/2025-10/graphql.json`,
           {
             method: 'POST',
             headers: {
@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
     try {
       // Register app/uninstalled webhook
-      await fetch(`https://${shop}/admin/api/2024-01/webhooks.json`, {
+      await fetch(`https://${shop}/admin/api/2025-10/webhooks.json`, {
         method: 'POST',
         headers: {
           'X-Shopify-Access-Token': access_token,
@@ -249,7 +249,7 @@ export async function GET(request: NextRequest) {
       console.log('✅ Registered app/uninstalled webhook');
 
       // Register subscription webhook for billing status changes
-      const subscriptionResult = await fetch(`https://${shop}/admin/api/2024-01/webhooks.json`, {
+      const subscriptionResult = await fetch(`https://${shop}/admin/api/2025-10/webhooks.json`, {
         method: 'POST',
         headers: {
           'X-Shopify-Access-Token': access_token,
@@ -276,7 +276,7 @@ export async function GET(request: NextRequest) {
     const returnUrl = `${appUrl}/api/billing/callback?shop=${shop}&store_id=${store.id}`;
 
     const existingResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/graphql.json`,
+      `https://${shop}/admin/api/2025-10/graphql.json`,
       {
         method: 'POST',
         headers: {

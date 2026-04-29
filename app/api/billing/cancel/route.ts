@@ -46,21 +46,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No valid access token' }, { status: 401 });
     }
 
-    // Cancel the recurring charge if we have one
+    // Cancel the subscription via GraphQL
     if (chargeId) {
-      console.log('🚫 [BILLING CANCEL] Canceling charge:', chargeId);
+      console.log('🚫 [BILLING CANCEL] Canceling subscription:', chargeId);
 
       const cancelResponse = await fetch(
-        `https://${shop}/admin/api/2024-01/recurring_application_charges/${chargeId}.json`,
+        `https://${shop}/admin/api/2025-10/graphql.json`,
         {
-          method: 'DELETE',
-          headers: { 'X-Shopify-Access-Token': accessToken },
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': accessToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: `
+              mutation AppSubscriptionCancel($id: ID!) {
+                appSubscriptionCancel(id: $id) {
+                  appSubscription { id status }
+                  userErrors { field message }
+                }
+              }
+            `,
+            variables: { id: chargeId },
+          }),
         }
       );
 
-      if (!cancelResponse.ok && cancelResponse.status !== 404) {
-        console.error('❌ [BILLING CANCEL] Failed to cancel charge:', cancelResponse.status);
-        // Continue anyway - we'll update our status
+      if (cancelResponse.ok) {
+        const cancelData = await cancelResponse.json();
+        const userErrors = cancelData.data?.appSubscriptionCancel?.userErrors;
+        if (userErrors?.length > 0) {
+          console.error('❌ [BILLING CANCEL] GraphQL errors:', userErrors);
+        }
+      } else {
+        console.error('❌ [BILLING CANCEL] Failed to cancel:', cancelResponse.status);
       }
     }
 

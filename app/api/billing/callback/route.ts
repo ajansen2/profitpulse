@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     // With appSubscriptionCreate (GraphQL), Shopify auto-activates when merchant approves —
     // no separate activation call needed. Just confirm the subscription is active.
     const graphqlResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/graphql.json`,
+      `https://${shop}/admin/api/2025-10/graphql.json`,
       {
         method: 'POST',
         headers: {

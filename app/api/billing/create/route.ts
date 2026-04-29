@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     // First, test if the token works at all with a simple API call
     console.log('💰 [BILLING CREATE] Testing token with shop.json...');
     const testResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/shop.json`,
+      `https://${shop}/admin/api/2025-10/shop.json`,
       { headers: { 'X-Shopify-Access-Token': accessToken } }
     );
     console.log('💰 [BILLING CREATE] Shop.json response:', testResponse.status);
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     // Check for existing subscriptions using GraphQL
     console.log('💰 [BILLING CREATE] Checking existing subscriptions via GraphQL...');
     const existingResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/graphql.json`,
+      `https://${shop}/admin/api/2025-10/graphql.json`,
       {
         method: 'POST',
         headers: {
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     console.log('💰 [BILLING CREATE] Creating subscription via GraphQL...');
 
     const chargeResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/graphql.json`,
+      `https://${shop}/admin/api/2025-10/graphql.json`,
       {
         method: 'POST',
         headers: {

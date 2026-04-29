@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch products with inventory from Shopify
     const response = await fetch(
-      `https://${store.shop_domain}/admin/api/2024-01/products.json?fields=id,title,variants&limit=250`,
+      `https://${store.shop_domain}/admin/api/2025-10/products.json?fields=id,title,variants&limit=250`,
       {
         headers: {
           'X-Shopify-Access-Token': store.access_token,

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         if (existingStore.access_token && existingStore.access_token !== 'revoked') {
           try {
             const subCheckResponse = await fetch(
-              `https://${shop}/admin/api/2024-01/graphql.json`,
+              `https://${shop}/admin/api/2025-10/graphql.json`,
               {
                 method: 'POST',
                 headers: {
