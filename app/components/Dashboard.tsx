@@ -247,12 +247,6 @@ export default function Dashboard({ store }: { store: Store }) {
     if (!store) return false;
     if (store.subscription_status === 'active') return false;
 
-    // Skip billing enforcement for dev/test stores (allows testing during app review)
-    const isDevStore = store.shop_domain?.includes('-test') ||
-                       store.shop_domain?.includes('development') ||
-                       store.shop_domain?.includes('dev-');
-    if (isDevStore) return false;
-
     const trialDays = getTrialDaysLeft();
     if (trialDays === null) return true;
     return trialDays <= 0;
